@@ -1,0 +1,47 @@
+{
+  "name": "title-todo",
+  "version": "1.0.0",
+  "description": "Magic TODO lists powered by LLMs",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eccentr1city/title-TODO.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Eccentr1city/title-TODO/issues"
+  },
+  "homepage": "https://github.com/Eccentr1city/title-TODO#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@types/node": "^25.0.3",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.23",
+    "better-sqlite3": "^12.5.0",
+    "drizzle-orm": "^0.45.1",
+    "next": "^16.1.1",
+    "postcss": "^8.5.6",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.1.1"
+  }
+}
