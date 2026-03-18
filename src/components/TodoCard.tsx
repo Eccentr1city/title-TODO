@@ -134,18 +134,18 @@ export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, showLis
             <div className="relative" ref={snoozeRef}>
               <button
                 onClick={() => setShowSnoozeMenu(!showSnoozeMenu)}
-                className="incandescent-button text-xs py-1 px-2"
+                className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2"
               >
                 Snooze
               </button>
               {showSnoozeMenu && (
-                <div className="absolute top-full left-0 mt-1 bg-background-tertiary border border-border z-50 min-w-[100px]">
+                <div className="absolute top-full left-0 mt-1 bg-background-tertiary border border-border z-50 min-w-[120px]">
                   {SNOOZE_OPTIONS.map((opt) => (
                     <button
                       key={opt.label}
                       onClick={() => handleSnooze(opt.hours)}
-                      className="w-full text-left px-3 py-2 text-sm text-text-normal 
-                                 hover:bg-background-secondary transition-colors"
+                      className="w-full text-left px-3 py-3 sm:py-2 text-sm text-text-normal
+                                 hover:bg-background-secondary active:bg-background-secondary transition-colors"
                     >
                       {opt.label}
                     </button>
@@ -157,7 +157,7 @@ export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, showLis
             {/* Edit button */}
             <button
               onClick={() => onEdit(todo)}
-              className="incandescent-button text-xs py-1 px-2"
+              className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2"
             >
               Edit
             </button>
@@ -165,7 +165,7 @@ export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, showLis
             {/* Delete button */}
             <button
               onClick={() => onDelete(todo.id)}
-              className="incandescent-button text-xs py-1 px-2 hover:border-error hover:text-error"
+              className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2 hover:border-error hover:text-error"
             >
               Delete
             </button>

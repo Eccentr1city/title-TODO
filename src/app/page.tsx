@@ -366,12 +366,12 @@ export default function Home() {
               )}
             </div>
             {selectedView === null && (
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <button
                   onClick={() => setShowFilterMenu(!showFilterMenu)}
-                  className={`text-sm px-2 py-1 transition-colors ${
+                  className={`text-sm px-3 py-1.5 transition-colors ${
                     inboxFilter.listIds.length > 0
-                      ? "text-accent"
+                      ? "text-accent border border-accent/30"
                       : "text-text-muted hover:text-text-normal"
                   }`}
                 >
@@ -385,12 +385,18 @@ export default function Home() {
                       className="fixed inset-0 z-40"
                       onClick={() => setShowFilterMenu(false)}
                     />
-                    <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-background-secondary border border-border shadow-lg max-h-80 overflow-y-auto">
-                      <div className="p-3 border-b border-border">
+                    {/* Desktop: dropdown. Mobile: bottom sheet */}
+                    <div className="
+                      fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto
+                      bg-background-secondary border-t border-border
+                      md:absolute md:inset-auto md:right-0 md:top-full md:mt-1
+                      md:w-72 md:border md:max-h-80 md:shadow-lg md:bottom-auto
+                    ">
+                      <div className="p-3 border-b border-border flex items-center justify-between">
                         <div className="flex gap-2 text-xs">
                           <button
                             onClick={() => updateFilter({ ...inboxFilter, mode: "blacklist" })}
-                            className={`px-2 py-1 ${
+                            className={`px-2 py-1.5 ${
                               inboxFilter.mode === "blacklist"
                                 ? "text-accent bg-accent/10"
                                 : "text-text-muted hover:text-text-normal"
@@ -400,7 +406,7 @@ export default function Home() {
                           </button>
                           <button
                             onClick={() => updateFilter({ ...inboxFilter, mode: "whitelist" })}
-                            className={`px-2 py-1 ${
+                            className={`px-2 py-1.5 ${
                               inboxFilter.mode === "whitelist"
                                 ? "text-accent bg-accent/10"
                                 : "text-text-muted hover:text-text-normal"
@@ -409,31 +415,37 @@ export default function Home() {
                             Show only selected
                           </button>
                         </div>
+                        <button
+                          onClick={() => setShowFilterMenu(false)}
+                          className="md:hidden text-text-muted text-lg px-2"
+                        >
+                          x
+                        </button>
                       </div>
                       <div className="py-1">
                         {lists.map((list) => (
                           <button
                             key={list.id}
                             onClick={() => toggleListFilter(list.id)}
-                            className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-background-tertiary"
+                            className="w-full text-left px-4 py-3 md:px-3 md:py-2 text-sm flex items-center gap-3 hover:bg-background-tertiary active:bg-background-tertiary"
                           >
-                            <span className={`w-4 text-center ${
+                            <span className={`w-5 text-center ${
                               inboxFilter.listIds.includes(list.id) ? "text-accent" : "text-text-faint"
                             }`}>
                               {inboxFilter.listIds.includes(list.id) ? "x" : "-"}
                             </span>
-                            <span className="truncate">{list.name}</span>
-                            <span className="text-xs text-text-faint ml-auto">
+                            <span className="truncate flex-1">{list.name}</span>
+                            <span className="text-xs text-text-faint">
                               ({list.itemCount})
                             </span>
                           </button>
                         ))}
                       </div>
                       {inboxFilter.listIds.length > 0 && (
-                        <div className="p-2 border-t border-border">
+                        <div className="p-3 border-t border-border pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                           <button
                             onClick={() => updateFilter({ ...inboxFilter, listIds: [] })}
-                            className="text-xs text-text-muted hover:text-accent w-full text-center"
+                            className="text-xs text-text-muted hover:text-accent w-full text-center py-1"
                           >
                             Clear filter
                           </button>

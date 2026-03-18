@@ -75,6 +75,7 @@ export function TodoEditor({ todo, lists, onSave, onClose }: TodoEditorProps) {
           <div>
             <label className="block text-sm text-text-muted mb-1">Notes</label>
             <textarea
+              suppressHydrationWarning
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={3}
@@ -99,7 +100,7 @@ export function TodoEditor({ todo, lists, onSave, onClose }: TodoEditorProps) {
           </div>
 
           {/* Reminder */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-text-muted mb-1">Next Reminder</label>
               <input

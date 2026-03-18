@@ -179,7 +179,7 @@ export function RefactorLists({ lists, onComplete, onCancel }: RefactorListsProp
               </div>
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <button
               onClick={onComplete}
               className="incandescent-button bg-accent/20 border-accent text-accent"
@@ -264,9 +264,10 @@ export function RefactorLists({ lists, onComplete, onCancel }: RefactorListsProp
         <div ref={chatEndRef} />
 
         {/* Chat input */}
-        <div className="sticky bottom-0 bg-background-primary pt-2 pb-4 space-y-3">
+        <div className="sticky bottom-0 bg-background-primary pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
           <div className="flex gap-2">
             <textarea
+              suppressHydrationWarning
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => {
@@ -288,7 +289,7 @@ export function RefactorLists({ lists, onComplete, onCancel }: RefactorListsProp
               Send
             </button>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             {chatMessages.length > 0 && (
               <button
                 onClick={implementChanges}

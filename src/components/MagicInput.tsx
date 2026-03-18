@@ -167,6 +167,7 @@ export function MagicInput({ onSubmit, isProcessing }: MagicInputProps) {
               {/* Textarea - center */}
               <div className="flex-1 relative min-w-0">
                 <textarea
+                  suppressHydrationWarning
                   ref={textareaRef}
                   value={value}
                   onChange={(e) => setValue(e.target.value)}

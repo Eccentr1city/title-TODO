@@ -472,13 +472,14 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
                 Useful for notes that Haiku didn&apos;t classify correctly.
               </p>
               <textarea
+                suppressHydrationWarning
                 value={manualFilePaths}
                 onChange={(e) => setManualFilePaths(e.target.value)}
                 placeholder={"movies-to-watch.md\nrecipes/favorites.md\ntravel-bucket-list.md"}
                 className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[150px]"
               />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button
                 onClick={startManualPlanning}
                 disabled={!manualFilePaths.trim()}
@@ -528,9 +529,10 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
               <div ref={manualEndRef} />
             </div>
 
-            <div className="sticky bottom-0 bg-background-primary pt-2 pb-4 space-y-3">
+            <div className="sticky bottom-0 bg-background-primary pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
               <div className="flex gap-2">
                 <textarea
+                  suppressHydrationWarning
                   value={manualInput}
                   onChange={(e) => setManualInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -552,7 +554,7 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
                   Send
                 </button>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2 sm:gap-3">
                 <button
                   onClick={applyManualPlan}
                   disabled={manualSending || manualMessages.length < 2}
@@ -627,7 +629,7 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
               )}
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button
                 onClick={onComplete}
                 className="incandescent-button bg-accent/20 border-accent text-accent"
@@ -650,12 +652,13 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
                 Edit the system prompt for classifying each note as personal/work/neither.
               </p>
               <textarea
+                suppressHydrationWarning
                 value={triagePrompt}
                 onChange={(e) => setTriagePrompt(e.target.value)}
                 className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[250px]"
               />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button onClick={runTriage} className="incandescent-button bg-accent/20 border-accent text-accent">
                 Run triage{forceReprocess ? " (all notes)" : ""}
               </button>
@@ -693,7 +696,7 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
                 </div>
               </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button onClick={startPlanning} className="incandescent-button bg-accent/20 border-accent text-accent">
                 Plan TODOs with Sonnet
               </button>
@@ -715,12 +718,13 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
                 Add any extra context or focus areas.
               </p>
               <textarea
+                suppressHydrationWarning
                 value={planPrompt}
                 onChange={(e) => setPlanPrompt(e.target.value)}
                 className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[300px]"
               />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button onClick={beginConversation} className="incandescent-button bg-accent/20 border-accent text-accent">
                 Start conversation
               </button>
@@ -761,9 +765,10 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
             </div>
 
             {/* Chat input */}
-            <div className="sticky bottom-0 bg-background-primary pt-2 pb-4 space-y-3">
+            <div className="sticky bottom-0 bg-background-primary pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
               <div className="flex gap-2">
                 <textarea
+                  suppressHydrationWarning
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -785,7 +790,7 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
                   Send
                 </button>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2 sm:gap-3">
                 <button
                   onClick={applyPlan}
                   disabled={isSending || chatMessages.length < 2}
@@ -872,7 +877,7 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
               )}
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button
                 onClick={() => { onComplete(); }}
                 className="incandescent-button bg-accent/20 border-accent text-accent"
