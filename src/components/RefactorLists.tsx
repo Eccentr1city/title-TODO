@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { TodoList } from "@/lib/types";
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 
 interface RefactorListsProps {
   lists: TodoList[];
@@ -9,276 +14,308 @@ interface RefactorListsProps {
   onCancel: () => void;
 }
 
-interface RefactorSuggestion {
-  action: "merge" | "rename" | "split" | "retag" | "delete";
-  listIds: string[];
-  newName?: string;
-  newSummary?: string;
-  newTags?: string[];
-  reason: string;
-}
-
-interface RefactorResponse {
-  suggestions: RefactorSuggestion[];
-  summary: string;
-}
-
 export function RefactorLists({ lists, onComplete, onCancel }: RefactorListsProps) {
-  const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set());
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [suggestions, setSuggestions] = useState<RefactorResponse | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
-  const [appliedIndices, setAppliedIndices] = useState<Set<number>>(new Set());
+  const [applyResults, setApplyResults] = useState<{
+    results: { action: string; result: string }[];
+    errors: string[];
+  } | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const toggleList = (id: string) => {
-    const newSet = new Set(selectedListIds);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setSelectedListIds(newSet);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  // Send a chat message and get Sonnet's response. Returns the updated messages array.
+  const sendToSonnet = async (messages: ChatMessage[]): Promise<ChatMessage[]> => {
+    const res = await fetch("/api/refactor/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+    const data = await res.json();
+    return [...messages, { role: "assistant" as const, content: data.response }];
   };
 
-  const selectAll = () => {
-    setSelectedListIds(new Set(lists.map((l) => l.id)));
-  };
+  const sendMessage = async (text?: string) => {
+    const userMessage = text || chatInput.trim();
+    if (!userMessage || isSending) return;
 
-  const selectNone = () => {
-    setSelectedListIds(new Set());
-  };
-
-  const analyze = async () => {
-    if (selectedListIds.size === 0) return;
-
-    setIsAnalyzing(true);
-    setSuggestions(null);
+    setChatInput("");
+    const updatedMessages = [...chatMessages, { role: "user" as const, content: userMessage }];
+    setChatMessages(updatedMessages);
+    setIsSending(true);
 
     try {
-      const res = await fetch("/api/refactor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          listIds: Array.from(selectedListIds),
-        }),
-      });
-
-      if (!res.ok) throw new Error("Failed to analyze");
-
-      const data = await res.json();
-      setSuggestions(data);
-    } catch (error) {
-      console.error("Refactor analysis error:", error);
+      const result = await sendToSonnet(updatedMessages);
+      setChatMessages(result);
+    } catch (err) {
+      console.error("Refactor chat error:", err);
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Error: failed to get response." },
+      ]);
     } finally {
-      setIsAnalyzing(false);
+      setIsSending(false);
     }
   };
 
-  const applySuggestion = async (index: number) => {
-    if (!suggestions) return;
-    const suggestion = suggestions.suggestions[index];
+  const implementChanges = async () => {
+    if (isSending) return;
+    setIsSending(true);
+
+    try {
+      // Build the messages: include any drafted input, then ask for JSON
+      let messages = [...chatMessages];
+
+      const draftText = chatInput.trim();
+      if (draftText) {
+        messages = [...messages, { role: "user" as const, content: draftText }];
+        setChatInput("");
+      }
+
+      // Ask Sonnet to output the structured JSON
+      const implementMsg = draftText
+        ? "Now please output the final actions as a JSON block."
+        : "Looks good. Please output the final actions as a JSON block.";
+      messages = [...messages, { role: "user" as const, content: implementMsg }];
+      setChatMessages(messages);
+
+      // Get Sonnet's response with JSON
+      const result = await sendToSonnet(messages);
+      setChatMessages(result);
+
+      // Extract and apply the JSON
+      const lastMsg = result[result.length - 1];
+      if (lastMsg.role !== "assistant") return;
+
+      const jsonMatch = lastMsg.content.match(/```json\s*([\s\S]*?)```/);
+      if (!jsonMatch) {
+        // Sonnet didn't output JSON — ask again
+        const retry = [...result, { role: "user" as const, content: "I need the actions as a ```json block. Please try again." }];
+        setChatMessages(retry);
+        const retryResult = await sendToSonnet(retry);
+        setChatMessages(retryResult);
+
+        const retryMsg = retryResult[retryResult.length - 1];
+        const retryMatch = retryMsg.content.match(/```json\s*([\s\S]*?)```/);
+        if (!retryMatch) return;
+
+        await applyActions(retryMatch[1]);
+        return;
+      }
+
+      await applyActions(jsonMatch[1]);
+    } catch (err) {
+      console.error("Implement error:", err);
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error: ${String(err)}` },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const applyActions = async (jsonStr: string) => {
+    let actions;
+    try {
+      actions = JSON.parse(jsonStr.trim());
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Error: could not parse the JSON. Try describing the changes again." },
+      ]);
+      return;
+    }
 
     setIsApplying(true);
-
+    setIsSending(false);
     try {
       const res = await fetch("/api/refactor/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ suggestion }),
+        body: JSON.stringify({ actions }),
       });
-
-      if (res.ok) {
-        setAppliedIndices((prev) => new Set([...prev, index]));
-      }
-    } catch (error) {
-      console.error("Apply suggestion error:", error);
+      const data = await res.json();
+      setApplyResults(data);
+    } catch (err) {
+      console.error("Apply error:", err);
+      setApplyResults({
+        results: [],
+        errors: [String(err)],
+      });
     } finally {
       setIsApplying(false);
     }
   };
 
-  const getActionLabel = (action: RefactorSuggestion["action"]) => {
-    switch (action) {
-      case "merge": return "Merge";
-      case "rename": return "Rename";
-      case "split": return "Split";
-      case "retag": return "Retag";
-      case "delete": return "Delete";
-    }
-  };
-
-  const getActionColor = (action: RefactorSuggestion["action"]) => {
-    switch (action) {
-      case "merge": return "text-accent";
-      case "rename": return "text-heat-2";
-      case "split": return "text-heat-4";
-      case "retag": return "text-success";
-      case "delete": return "text-error";
-    }
-  };
-
-  return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className="max-w-2xl">
-        {/* Selection phase */}
-        {!suggestions && (
-          <>
-            <p className="text-text-muted mb-4">
-              Select lists to analyze for potential reorganization. Opus will suggest 
-              ways to merge similar lists, rename for clarity, or restructure your organization.
-            </p>
-
-            {/* Quick select buttons */}
-            <div className="flex gap-2 mb-4">
-              <button onClick={selectAll} className="incandescent-button text-sm py-1">
-                Select All
-              </button>
-              <button onClick={selectNone} className="incandescent-button text-sm py-1">
-                Select None
-              </button>
-            </div>
-
-            {/* List checkboxes */}
-            <div className="space-y-2 mb-6">
-              {lists.map((list) => (
-                <label
-                  key={list.id}
-                  className={`flex items-start gap-3 p-3 cursor-pointer transition-all
-                             ${selectedListIds.has(list.id) 
-                               ? "bg-background-tertiary border border-accent" 
-                               : "bg-background-secondary border border-border hover:border-border-hover"}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedListIds.has(list.id)}
-                    onChange={() => toggleList(list.id)}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{list.name}</span>
-                      <span className="text-xs text-text-faint">
-                        ({list.itemCount} items)
-                      </span>
-                      {list.tags.length > 0 && (
-                        <span className="text-xs text-text-muted">
-                          #{list.tags.join(" #")}
-                        </span>
-                      )}
-                    </div>
-                    {list.summary && (
-                      <p className="text-sm text-text-muted mt-1 truncate">
-                        {list.summary}
-                      </p>
-                    )}
+  // Done state
+  if (applyResults) {
+    return (
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="incandescent-card p-4">
+            <h3 className="heat-3 font-medium mb-3">Refactor Complete</h3>
+            {applyResults.results.length > 0 && (
+              <div className="space-y-2 mb-4">
+                {applyResults.results.map((r, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="text-accent font-medium">{r.action}:</span>{" "}
+                    <span className="text-text-normal">{r.result}</span>
                   </div>
-                </label>
-              ))}
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={analyze}
-                disabled={selectedListIds.size === 0 || isAnalyzing}
-                className="incandescent-button bg-accent/20 border-accent text-accent
-                           disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {isAnalyzing ? "Analyzing with Opus..." : `Analyze ${selectedListIds.size} Lists`}
-              </button>
-              <button onClick={onCancel} className="incandescent-button">
-                Cancel
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Results phase */}
-        {suggestions && (
-          <>
-            <div className="mb-6 p-4 bg-background-tertiary border border-border">
-              <h3 className="text-lg heat-2 mb-2">Analysis Summary</h3>
-              <p className="text-text-muted">{suggestions.summary}</p>
-            </div>
-
-            {suggestions.suggestions.length === 0 ? (
-              <p className="text-text-muted">
-                No reorganization suggestions. Your lists look well-organized!
-              </p>
-            ) : (
-              <div className="space-y-4 mb-6">
-                {suggestions.suggestions.map((suggestion, index) => {
-                  const isApplied = appliedIndices.has(index);
-                  const listNames = suggestion.listIds
-                    .map((id) => lists.find((l) => l.id === id)?.name)
-                    .filter(Boolean)
-                    .join(", ");
-
-                  return (
-                    <div
-                      key={index}
-                      className={`p-4 border transition-all
-                                 ${isApplied 
-                                   ? "bg-success/10 border-success/30 opacity-60" 
-                                   : "bg-background-secondary border-border"}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`font-medium ${getActionColor(suggestion.action)}`}>
-                              {getActionLabel(suggestion.action)}
-                            </span>
-                            <span className="text-text-muted">
-                              {listNames}
-                            </span>
-                          </div>
-                          {suggestion.newName && (
-                            <p className="text-sm text-accent">
-                              &rarr; {suggestion.newName}
-                            </p>
-                          )}
-                          <p className="text-sm text-text-muted mt-2">
-                            {suggestion.reason}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => applySuggestion(index)}
-                          disabled={isApplied || isApplying}
-                          className="incandescent-button text-sm py-1 flex-shrink-0
-                                     disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          {isApplied ? "Applied" : "Apply"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                ))}
               </div>
             )}
+            {applyResults.errors.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs text-error uppercase">Errors:</div>
+                {applyResults.errors.map((e, i) => (
+                  <div key={i} className="text-sm text-error">{e}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onComplete}
+              className="incandescent-button bg-accent/20 border-accent text-accent"
+            >
+              Go to Inbox
+            </button>
+            <button
+              onClick={() => {
+                setApplyResults(null);
+                setChatMessages([]);
+              }}
+              className="incandescent-button"
+            >
+              Start over
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-            {/* Done buttons */}
-            <div className="flex gap-2">
+  // Applying state
+  if (isApplying) {
+    return (
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="text-center py-12">
+          <div className="text-4xl mb-4 animate-pulse">~</div>
+          <p className="text-text-muted">Applying changes...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div className="max-w-3xl mx-auto space-y-4">
+
+        {/* Empty state / intro */}
+        {chatMessages.length === 0 && (
+          <div className="incandescent-card p-4 space-y-3">
+            <h3 className="heat-3 font-medium">Refactor Lists</h3>
+            <p className="text-sm text-text-muted">
+              Tell Sonnet what you want to change about your list organization. For example:
+            </p>
+            <ul className="text-sm text-text-faint space-y-1 ml-4 list-disc">
+              <li>Split &quot;Reading &amp; Watchlist&quot; into separate lists</li>
+              <li>Merge similar lists together</li>
+              <li>Rename or retag lists for better organization</li>
+              <li>Delete empty or obsolete lists</li>
+              <li>Move items between lists</li>
+            </ul>
+            <div className="text-xs text-text-faint pt-2 border-t border-border">
+              Current lists: {lists.map((l) => l.name).join(", ")}
+            </div>
+          </div>
+        )}
+
+        {/* Chat messages */}
+        {chatMessages.map((msg, i) => (
+          <div
+            key={i}
+            className={`${
+              msg.role === "assistant"
+                ? "incandescent-card p-4"
+                : "bg-accent/10 border border-accent/30 p-4"
+            }`}
+          >
+            <div className="text-xs text-text-faint mb-2 uppercase tracking-wider">
+              {msg.role === "assistant" ? "Sonnet" : "You"}
+            </div>
+            <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+          </div>
+        ))}
+
+        {isSending && (
+          <div className="incandescent-card p-4">
+            <div className="text-xs text-text-faint mb-2 uppercase tracking-wider">Sonnet</div>
+            <div className="animate-pulse text-text-muted">Thinking...</div>
+          </div>
+        )}
+
+        <div ref={chatEndRef} />
+
+        {/* Chat input */}
+        <div className="sticky bottom-0 bg-background-primary pt-2 pb-4 space-y-3">
+          <div className="flex gap-2">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder="Describe what you want to change..."
+              disabled={isSending}
+              rows={2}
+              className="flex-1 incandescent-input px-3 py-2 text-sm resize-none"
+            />
+            <button
+              onClick={() => sendMessage()}
+              disabled={!chatInput.trim() || isSending}
+              className="incandescent-button self-end disabled:opacity-30"
+            >
+              Send
+            </button>
+          </div>
+          <div className="flex gap-3">
+            {chatMessages.length > 0 && (
               <button
-                onClick={onComplete}
-                className="incandescent-button bg-accent/20 border-accent text-accent"
+                onClick={implementChanges}
+                disabled={isSending}
+                className="incandescent-button bg-accent/20 border-accent text-accent disabled:opacity-30"
               >
-                Done
+                Implement changes
               </button>
+            )}
+            {chatMessages.length > 0 && (
               <button
                 onClick={() => {
-                  setSuggestions(null);
-                  setAppliedIndices(new Set());
+                  setChatMessages([]);
+                  setChatInput("");
+                  setApplyResults(null);
                 }}
-                className="incandescent-button"
+                className="incandescent-button text-sm text-text-muted"
               >
-                Analyze Again
+                Clear chat
               </button>
-            </div>
-          </>
-        )}
+            )}
+            <button onClick={onCancel} className="incandescent-button text-sm">
+              Back
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
-

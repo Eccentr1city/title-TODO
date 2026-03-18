@@ -7,12 +7,19 @@ import { TodoCard } from "@/components/TodoCard";
 import { TodoEditor } from "@/components/TodoEditor";
 import { AskAboutList } from "@/components/AskAboutList";
 import { RefactorLists } from "@/components/RefactorLists";
+import { ObsidianSync } from "@/components/ObsidianSync";
 import { TodoItem, TodoList } from "@/lib/types";
 
 // Special view IDs
 const VIEW_INBOX = null;
 const VIEW_COMPLETED = "__completed__";
 const VIEW_REFACTOR = "__refactor__";
+const VIEW_OBSIDIAN = "__obsidian__";
+
+interface InboxFilter {
+  mode: "blacklist" | "whitelist";
+  listIds: string[];
+}
 
 export default function Home() {
   const [lists, setLists] = useState<TodoList[]>([]);
@@ -21,6 +28,8 @@ export default function Home() {
   const [selectedView, setSelectedView] = useState<string | null>(VIEW_INBOX);
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>({ mode: "blacklist", listIds: [] });
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   // Fetch initial data
   const fetchData = useCallback(async () => {
@@ -43,9 +52,37 @@ export default function Home() {
     setCompletedTodos(data);
   }, []);
 
+  // Fetch inbox filter
+  const fetchFilter = useCallback(async () => {
+    try {
+      const res = await fetch("/api/inbox-filter");
+      const data = await res.json();
+      setInboxFilter(data);
+    } catch {
+      // Use default
+    }
+  }, []);
+
+  const updateFilter = async (filter: InboxFilter) => {
+    setInboxFilter(filter);
+    await fetch("/api/inbox-filter", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(filter),
+    });
+  };
+
+  const toggleListFilter = (listId: string) => {
+    const newIds = inboxFilter.listIds.includes(listId)
+      ? inboxFilter.listIds.filter((id) => id !== listId)
+      : [...inboxFilter.listIds, listId];
+    updateFilter({ ...inboxFilter, listIds: newIds });
+  };
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchFilter();
+  }, [fetchData, fetchFilter]);
 
   useEffect(() => {
     if (selectedView === VIEW_COMPLETED) {
@@ -214,6 +251,7 @@ export default function Home() {
   // Determine what to display
   const isCompletedView = selectedView === VIEW_COMPLETED;
   const isRefactorView = selectedView === VIEW_REFACTOR;
+  const isObsidianView = selectedView === VIEW_OBSIDIAN;
   const isListView = selectedView && !selectedView.startsWith("__");
   const selectedList = isListView ? lists.find((l) => l.id === selectedView) : null;
 
@@ -231,8 +269,16 @@ export default function Home() {
           if (isListView) {
             return todo.listId === selectedView && todo.status === "active";
           }
-          // Inbox: show all active todos
-          return todo.status === "active";
+          // Inbox: show active todos, applying filter
+          if (todo.status !== "active") return false;
+          if (inboxFilter.listIds.length > 0) {
+            if (inboxFilter.mode === "blacklist") {
+              return !inboxFilter.listIds.includes(todo.listId);
+            } else {
+              return inboxFilter.listIds.includes(todo.listId);
+            }
+          }
+          return true;
         })
         .sort((a, b) => {
           // Sort by next reminder (soonest first), nulls last
@@ -244,58 +290,177 @@ export default function Home() {
           return new Date(a.nextReminder).getTime() - new Date(b.nextReminder).getTime();
         });
 
-  const inboxCount = todos.filter((t) => t.status === "active").length;
+  const inboxCount = todos.filter((t) => {
+    if (t.status !== "active") return false;
+    if (inboxFilter.listIds.length > 0) {
+      if (inboxFilter.mode === "blacklist") return !inboxFilter.listIds.includes(t.listId);
+      return inboxFilter.listIds.includes(t.listId);
+    }
+    return true;
+  }).length;
   const completedCount = completedTodos.length;
 
   // Get view title
   const getViewTitle = () => {
     if (isCompletedView) return "Completed";
     if (isRefactorView) return "Refactor Lists";
+    if (isObsidianView) return "Sync Obsidian Notes";
     if (selectedList) return selectedList.name;
     return "Inbox";
   };
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleSelectView = (view: string | null) => {
+    setSelectedView(view);
+    setSidebarOpen(false);
+  };
+
   return (
     <div className="h-screen flex flex-col">
-      {/* Magic Input - Top */}
-      <header className="flex-shrink-0 border-b border-border">
-        <MagicInput onSubmit={handleMagicInput} isProcessing={isProcessing} />
-      </header>
-
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Mobile overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-30 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        <Sidebar
-          lists={lists}
-          selectedView={selectedView}
-          onSelectView={setSelectedView}
-          inboxCount={inboxCount}
-          completedCount={completedCount}
-        />
+        <div className={`
+          fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 ease-in-out
+          md:relative md:translate-x-0 md:z-auto
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        `}>
+          <Sidebar
+            lists={lists}
+            selectedView={selectedView}
+            onSelectView={handleSelectView}
+            inboxCount={inboxCount}
+            completedCount={completedCount}
+          />
+        </div>
 
         {/* Main Area */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Header */}
-          <div className="flex-shrink-0 p-4 border-b border-border">
-            <h2 className="text-xl heat-2">{getViewTitle()}</h2>
-            {selectedList && (
-              <p className="text-sm text-text-muted mt-1">{selectedList.summary}</p>
-            )}
-            {isCompletedView && (
-              <p className="text-sm text-text-muted mt-1">
-                {completedCount} completed items
-              </p>
+          <div className="flex-shrink-0 p-4 border-b border-border flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="md:hidden text-text-muted hover:text-accent transition-colors text-lg"
+              aria-label="Toggle sidebar"
+            >
+              &#9776;
+            </button>
+            <div className="flex-1">
+              <h2 className="text-xl heat-2">{getViewTitle()}</h2>
+              {selectedList && (
+                <p className="text-sm text-text-muted mt-1">{selectedList.summary}</p>
+              )}
+              {isCompletedView && (
+                <p className="text-sm text-text-muted mt-1">
+                  {completedCount} completed items
+                </p>
+              )}
+            </div>
+            {selectedView === null && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowFilterMenu(!showFilterMenu)}
+                  className={`text-sm px-2 py-1 transition-colors ${
+                    inboxFilter.listIds.length > 0
+                      ? "text-accent"
+                      : "text-text-muted hover:text-text-normal"
+                  }`}
+                >
+                  {inboxFilter.listIds.length > 0
+                    ? `filter (${inboxFilter.listIds.length})`
+                    : "filter"}
+                </button>
+                {showFilterMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowFilterMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-background-secondary border border-border shadow-lg max-h-80 overflow-y-auto">
+                      <div className="p-3 border-b border-border">
+                        <div className="flex gap-2 text-xs">
+                          <button
+                            onClick={() => updateFilter({ ...inboxFilter, mode: "blacklist" })}
+                            className={`px-2 py-1 ${
+                              inboxFilter.mode === "blacklist"
+                                ? "text-accent bg-accent/10"
+                                : "text-text-muted hover:text-text-normal"
+                            }`}
+                          >
+                            Hide selected
+                          </button>
+                          <button
+                            onClick={() => updateFilter({ ...inboxFilter, mode: "whitelist" })}
+                            className={`px-2 py-1 ${
+                              inboxFilter.mode === "whitelist"
+                                ? "text-accent bg-accent/10"
+                                : "text-text-muted hover:text-text-normal"
+                            }`}
+                          >
+                            Show only selected
+                          </button>
+                        </div>
+                      </div>
+                      <div className="py-1">
+                        {lists.map((list) => (
+                          <button
+                            key={list.id}
+                            onClick={() => toggleListFilter(list.id)}
+                            className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-background-tertiary"
+                          >
+                            <span className={`w-4 text-center ${
+                              inboxFilter.listIds.includes(list.id) ? "text-accent" : "text-text-faint"
+                            }`}>
+                              {inboxFilter.listIds.includes(list.id) ? "x" : "-"}
+                            </span>
+                            <span className="truncate">{list.name}</span>
+                            <span className="text-xs text-text-faint ml-auto">
+                              ({list.itemCount})
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      {inboxFilter.listIds.length > 0 && (
+                        <div className="p-2 border-t border-border">
+                          <button
+                            onClick={() => updateFilter({ ...inboxFilter, listIds: [] })}
+                            className="text-xs text-text-muted hover:text-accent w-full text-center"
+                          >
+                            Clear filter
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Content */}
-          {isRefactorView ? (
-            <RefactorLists 
-              lists={lists} 
+          {/* Content — ObsidianSync and RefactorLists stay mounted to preserve chat state */}
+          <div className={`${isObsidianView ? "flex flex-col flex-1 overflow-hidden" : "hidden"}`}>
+            <ObsidianSync
+              onComplete={() => { fetchData(); setSelectedView(VIEW_INBOX); }}
+              onCancel={() => setSelectedView(VIEW_INBOX)}
+            />
+          </div>
+          <div className={`${isRefactorView ? "flex flex-col flex-1 overflow-hidden" : "hidden"}`}>
+            <RefactorLists
+              lists={lists}
               onComplete={handleRefactorComplete}
               onCancel={() => setSelectedView(VIEW_INBOX)}
             />
-          ) : (
+          </div>
+          {!isObsidianView && !isRefactorView && (
             <>
               {/* Todo List */}
               <div className="flex-1 overflow-y-auto p-4">
@@ -304,11 +469,11 @@ export default function Home() {
                     <p className="text-4xl mb-4">*</p>
                     <p>{isCompletedView ? "No completed items yet." : "No items yet."}</p>
                     {!isCompletedView && (
-                      <p className="text-sm mt-2">Type something in the magic box above!</p>
+                      <p className="text-sm mt-2">Type something in the box below!</p>
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-3 max-w-2xl">
+                  <div className="space-y-3 max-w-2xl mx-auto md:mx-0">
                     {displayedTodos.map((todo) => (
                       <TodoCard
                         key={todo.id}
@@ -338,6 +503,11 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* Magic Input - Bottom */}
+      <footer className="flex-shrink-0 border-t border-border">
+        <MagicInput onSubmit={handleMagicInput} isProcessing={isProcessing} />
+      </footer>
 
       {/* Edit Modal */}
       <TodoEditor

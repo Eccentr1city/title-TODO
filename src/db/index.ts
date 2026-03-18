@@ -4,8 +4,15 @@ import * as schema from "./schema";
 import path from "path";
 import fs from "fs";
 
-// Ensure data directory exists
-const dataDir = path.join(process.cwd(), "data");
+// Store data in iCloud for automatic backup
+const icloudDir = path.join(
+  process.env.HOME || "",
+  "Library/Mobile Documents/com~apple~CloudDocs/title-TODO"
+);
+// Fallback to local data/ directory if iCloud isn't available
+const dataDir = fs.existsSync(icloudDir)
+  ? icloudDir
+  : path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }

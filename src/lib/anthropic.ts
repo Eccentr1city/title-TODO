@@ -6,8 +6,8 @@ export const anthropic = new Anthropic({
 
 export const MODELS = {
   cheap: "claude-haiku-4-5-20251001",
-  medium: "claude-sonnet-4-5-20250929", 
-  expensive: "claude-opus-4-5-20251101",
+  medium: "claude-sonnet-4-6",
+  expensive: "claude-opus-4-6",
 } as const;
 
 export type ModelTier = keyof typeof MODELS;

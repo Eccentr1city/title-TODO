@@ -64,7 +64,6 @@ export async function POST(request: NextRequest) {
       .select({ title: todos.title })
       .from(todos)
       .where(inArray(todos.listId, [list.id]))
-      .limit(10)
       .all();
     listSamples[list.id] = items.map((i) => i.title);
   }

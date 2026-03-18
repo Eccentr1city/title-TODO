@@ -179,6 +179,71 @@ input[type="checkbox"]:checked::after {
   font-size: 12px;
 }
 
+/* Magic glow border — animated gradient that orbits the input box */
+.magic-glow-border {
+  position: relative;
+  background: linear-gradient(
+    var(--glow-angle, 0deg),
+    var(--accent) 0%,
+    transparent 20%,
+    transparent 40%,
+    rgba(255, 170, 85, 0.35) 50%,
+    transparent 60%,
+    transparent 80%,
+    var(--accent) 100%
+  );
+  animation: magic-rotate 4s linear infinite;
+}
+
+.magic-glow-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  filter: blur(8px);
+  opacity: 0.5;
+  z-index: -1;
+}
+
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes magic-rotate {
+  from { --glow-angle: 0deg; }
+  to { --glow-angle: 360deg; }
+}
+
+/* Fallback for browsers without @property support — subtle pulse instead */
+@supports not (background: paint(something)) {
+  .magic-glow-border {
+    background: var(--border-color);
+    box-shadow:
+      0 0 8px rgba(255, 170, 85, 0.2),
+      0 0 20px rgba(255, 170, 85, 0.1);
+    animation: magic-pulse 3s ease-in-out infinite;
+  }
+
+  .magic-glow-border::before {
+    display: none;
+  }
+
+  @keyframes magic-pulse {
+    0%, 100% {
+      box-shadow:
+        0 0 8px rgba(255, 170, 85, 0.2),
+        0 0 20px rgba(255, 170, 85, 0.1);
+    }
+    50% {
+      box-shadow:
+        0 0 12px rgba(255, 170, 85, 0.35),
+        0 0 30px rgba(255, 170, 85, 0.15);
+    }
+  }
+}
+
 /* Animation for progress bar */
 @keyframes slideProgress {
   0% { transform: translateX(-100%); }

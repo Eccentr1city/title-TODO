@@ -103,14 +103,25 @@ export function Sidebar({ lists, selectedView, onSelectView, inboxCount, complet
         ))}
       </div>
 
-      {/* Footer with Refactor button */}
+      {/* Footer */}
       <div className="border-t border-border">
+        <button
+          onClick={() => onSelectView("__obsidian__")}
+          className={`w-full text-left px-4 py-3 flex items-center gap-2
+                      transition-all duration-150 text-sm
+                      ${selectedView === "__obsidian__"
+                        ? "bg-background-tertiary text-accent glow-text"
+                        : "hover:bg-background-tertiary text-text-muted"}`}
+        >
+          <span>&#10022;</span>
+          <span>Sync Obsidian</span>
+        </button>
         <button
           onClick={() => onSelectView("__refactor__")}
           className={`w-full text-left px-4 py-3 flex items-center gap-2
                       transition-all duration-150 text-sm
-                      ${selectedView === "__refactor__" 
-                        ? "bg-background-tertiary text-accent glow-text" 
+                      ${selectedView === "__refactor__"
+                        ? "bg-background-tertiary text-accent glow-text"
                         : "hover:bg-background-tertiary text-text-muted"}`}
         >
           <span>~</span>

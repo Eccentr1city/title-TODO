@@ -37,6 +37,8 @@ Response format:
   ]
 }
 
+Only add additional content/notes if the user explicitly includes too much information to fit in a short title. If the user only includes enough information to write a short title, don't add any additional content/notes.
+
 Be aggressive about creating sensible lists. If someone mentions movies, create a Movies list. If they mention work tasks, create appropriate work lists. Use your judgment.
 
 For timeless lists (movies to watch, books to read, ideas), set listIsTimeBound to false and don't set reminders.`;

@@ -1,0 +1,145 @@
+import { NextRequest, NextResponse } from "next/server";
+import { anthropic, MODELS } from "@/lib/anthropic";
+import { db } from "@/db";
+import { lists, todos } from "@/db/schema";
+import { eq } from "drizzle-orm";
+
+function getListsContext() {
+  const allLists = db.select().from(lists).all();
+  const activeTodos = db.select().from(todos).where(eq(todos.status, "active")).all();
+
+  const listsWithItems = allLists.map((list) => {
+    const items = activeTodos.filter((t) => t.listId === list.id);
+    const itemLines = items.map((t) => `    - "${t.title}"`).join("\n");
+    return `List: "${list.name}" (ID: ${list.id})
+  Summary: ${list.summary || "No summary"}
+  Tags: [${list.tags?.length ? list.tags.join(", ") : "none"}]
+  Type: ${list.isTimeBound ? "time-bound" : "timeless"}
+  Items (${list.itemCount} total):
+${itemLines || "    (empty)"}`;
+  });
+
+  return listsWithItems.join("\n\n");
+}
+
+const SYSTEM_PROMPT = `You are helping the user reorganize their TODO lists. Today's date is {TODAY}.
+
+Here are all the current lists and their items:
+
+{LISTS_CONTEXT}
+
+---
+
+You have the following actions available. Each action has specific fields and specific behavior — read carefully.
+
+## 1. edit — Change a list's name, summary, and/or tags
+Use this for ANY change to list metadata: renaming, updating the description/summary, changing tags.
+- "listIds": exactly 1 list ID
+- Include at least one of: "newName", "newSummary", "newTags"
+- Only include the fields you want to change; omitted fields are left as-is
+\`\`\`
+{"action": "edit", "listIds": ["id"], "newName": "...", "newSummary": "...", "newTags": ["..."]}
+\`\`\`
+
+## 2. merge — Combine two or more lists into a new one
+Creates a new list, moves ALL items from the source lists into it, then DELETES the source lists.
+- "listIds": 2+ list IDs to merge
+- "newName", "newSummary": required — the name and description for the merged list
+- "newTags": optional
+\`\`\`
+{"action": "merge", "listIds": ["id1", "id2"], "newName": "...", "newSummary": "...", "newTags": ["..."]}
+\`\`\`
+
+## 3. split — Pull items out of a list into one or more new lists
+Creates new list(s) and moves the specified items into them. Items NOT listed in any split target STAY in the original list (the original list is NOT deleted unless all items are moved out).
+- "listIds": exactly 1 list ID (the source)
+- "splits": array of 1+ targets. Each target has:
+  - "newName", "newSummary": required
+  - "newTags": optional (defaults to source list's tags)
+  - "isTimeBound": optional (defaults to source list's setting)
+  - "itemTitles": array of item titles to move (matched case-insensitively)
+\`\`\`
+{"action": "split", "listIds": ["id"], "splits": [{"newName": "...", "newSummary": "...", "itemTitles": ["item A", "item B"]}]}
+\`\`\`
+
+## 4. move — Move specific items from one list to another existing list
+Does NOT create or delete any lists. Just reassigns items.
+- "listIds": exactly 1 list ID (the source)
+- "targetListId": the destination list ID (must already exist)
+- "itemTitles": array of item titles to move (matched case-insensitively)
+\`\`\`
+{"action": "move", "listIds": ["source-id"], "targetListId": "dest-id", "itemTitles": ["item A"]}
+\`\`\`
+
+## 5. delete — Permanently delete a list and ALL its items
+This is destructive and irreversible. Confirm with the user before proposing this.
+- "listIds": 1+ list IDs
+\`\`\`
+{"action": "delete", "listIds": ["id"]}
+\`\`\`
+
+## 6. edit_items — Edit individual TODO items (title, content, tags, effort)
+Use this for bulk-editing items: renaming todos, updating descriptions, retagging, changing effort levels.
+- "listIds": optional — scopes the search to items in these lists. If omitted or empty, searches all active items.
+- "items": array of edits. Each edit has:
+  - "oldTitle": required — the current title of the item (matched case-insensitively)
+  - "newTitle": optional — new title for the item
+  - "newContent": optional — new description/notes for the item (set to "" to clear)
+  - "newTags": optional — new tags array for the item
+  - "newEffort": optional — "quick", "medium", "deep", or null
+  - Only include the fields you want to change; omitted fields are left as-is
+\`\`\`
+{"action": "edit_items", "listIds": ["id"], "items": [{"oldTitle": "Old name", "newTitle": "Better name"}, {"oldTitle": "Another item", "newContent": "Added some notes", "newTags": ["urgent"]}]}
+\`\`\`
+
+---
+
+IMPORTANT:
+- Always use exact list IDs from the data above. Never invent IDs.
+- Item titles in "itemTitles", "splits[].itemTitles", and "items[].oldTitle" are matched case-insensitively against the actual items. Use the exact title text shown in the data above.
+- You can combine multiple actions in one JSON array (e.g., split + edit + move + edit_items).
+
+## Conversation guidelines
+- Discuss and propose changes before outputting JSON
+- ONLY output the JSON block (fenced with \`\`\`json) when the user explicitly confirms they want to apply
+- Ask clarifying questions when the user's request is ambiguous`;
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const { messages } = body as {
+    messages: { role: "user" | "assistant"; content: string }[];
+  };
+
+  const today = new Date().toISOString().split("T")[0];
+  const listsContext = getListsContext();
+
+  const prompt = SYSTEM_PROMPT
+    .replace("{TODAY}", today)
+    .replace("{LISTS_CONTEXT}", listsContext);
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MODELS.medium,
+      max_tokens: 4096,
+      system: prompt,
+      messages,
+    });
+
+    const textBlock = response.content.find((b) => b.type === "text");
+    const text = textBlock?.type === "text" ? textBlock.text : "";
+
+    return NextResponse.json({
+      response: text,
+      usage: {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      },
+    });
+  } catch (error) {
+    console.error("Refactor chat error:", error);
+    return NextResponse.json(
+      { error: "Failed to get response" },
+      { status: 500 }
+    );
+  }
+}
