@@ -27,12 +27,30 @@ export async function POST(request: NextRequest) {
   // Get existing lists for context
   const existingLists = await db.select().from(lists).all();
   const listsContext = existingLists
-    .map((l) => `- "${l.name}": ${l.summary || "No description"} ${l.isTimeBound ? "(time-bound)" : "(timeless)"}`)
+    .map((l) => {
+      const tags = (l.tags as string[])?.length > 0 ? ` [tags: ${(l.tags as string[]).join(", ")}]` : "";
+      return `- "${l.name}": ${l.summary || "No description"} ${l.isTimeBound ? "(time-bound)" : "(timeless)"}${tags}`;
+    })
     .join("\n");
 
-  const contextMessage = existingLists.length > 0
+  // Collect all distinct tags used across existing todos
+  const existingTodos = await db.select({ tags: todos.tags }).from(todos).all();
+  const tagCounts = new Map<string, number>();
+  for (const t of existingTodos) {
+    for (const tag of (t.tags as string[]) || []) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  const tagsContext = tagCounts.size > 0
+    ? `\n\nExisting tags (reuse when appropriate):\n${[...tagCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag, count]) => `- "${tag}" (used ${count}x)`)
+        .join("\n")}`
+    : "";
+
+  const contextMessage = (existingLists.length > 0
     ? `\n\nExisting lists:\n${listsContext}`
-    : "\n\nNo existing lists yet. Create appropriate ones.";
+    : "\n\nNo existing lists yet. Create appropriate ones.") + tagsContext;
 
   try {
     const response = await chat(

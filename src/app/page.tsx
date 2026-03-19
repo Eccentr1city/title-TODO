@@ -28,6 +28,11 @@ export default function Home() {
   const [selectedView, setSelectedView] = useState<string | null>(VIEW_INBOX);
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+  const [lastGeneration, setLastGeneration] = useState<{
+    todoIds: string[];
+    listIds: string[];
+    todoListMap: Record<string, string>;
+  } | null>(null);
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>({ mode: "blacklist", listIds: [] });
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
@@ -110,7 +115,6 @@ export default function Home() {
       }
       if (data.todos?.length > 0) {
         setTodos((prev) => [...prev, ...data.todos]);
-        // Update list item counts
         setLists((prev) =>
           prev.map((list) => {
             const newItems = data.todos.filter((t: TodoItem) => t.listId === list.id);
@@ -120,10 +124,55 @@ export default function Home() {
           })
         );
       }
+
+      const todoListMap: Record<string, string> = {};
+      for (const t of data.todos || []) {
+        todoListMap[t.id] = t.listId;
+      }
+      setLastGeneration({
+        todoIds: (data.todos || []).map((t: TodoItem) => t.id),
+        listIds: (data.lists || []).map((l: TodoList) => l.id),
+        todoListMap,
+      });
     } catch (error) {
       console.error("Magic input error:", error);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Handle undo of last magic generation
+  const handleUndo = async () => {
+    if (!lastGeneration) return;
+
+    try {
+      const res = await fetch("/api/magic/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lastGeneration),
+      });
+
+      if (!res.ok) throw new Error("Failed to undo");
+
+      const { deletedTodoIds, deletedListIds } = await res.json();
+
+      setTodos((prev) => prev.filter((t) => !deletedTodoIds.includes(t.id)));
+
+      setLists((prev) => {
+        const remaining = prev.filter((l) => !deletedListIds.includes(l.id));
+        return remaining.map((list) => {
+          const removedCount = deletedTodoIds.filter(
+            (tid: string) => lastGeneration.todoListMap[tid] === list.id
+          ).length;
+          return removedCount > 0
+            ? { ...list, itemCount: Math.max(0, list.itemCount - removedCount) }
+            : list;
+        });
+      });
+
+      setLastGeneration(null);
+    } catch (error) {
+      console.error("Undo error:", error);
     }
   };
 
@@ -518,7 +567,12 @@ export default function Home() {
 
       {/* Magic Input - Bottom */}
       <footer className="flex-shrink-0 border-t border-border">
-        <MagicInput onSubmit={handleMagicInput} isProcessing={isProcessing} />
+        <MagicInput
+          onSubmit={handleMagicInput}
+          isProcessing={isProcessing}
+          canUndo={!!lastGeneration && lastGeneration.todoIds.length > 0}
+          onUndo={handleUndo}
+        />
       </footer>
 
       {/* Edit Modal */}

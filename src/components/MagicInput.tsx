@@ -7,6 +7,8 @@ type ModelTier = "cheap" | "medium" | "expensive";
 interface MagicInputProps {
   onSubmit: (text: string, model: ModelTier) => Promise<void>;
   isProcessing: boolean;
+  canUndo: boolean;
+  onUndo: () => Promise<void>;
 }
 
 const MODEL_LABELS: Record<ModelTier, string> = {
@@ -45,10 +47,11 @@ function getAutoModel(length: number): ModelTier {
   return "cheap";
 }
 
-export function MagicInput({ onSubmit, isProcessing }: MagicInputProps) {
+export function MagicInput({ onSubmit, isProcessing, canUndo, onUndo }: MagicInputProps) {
   const [value, setValue] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelTier | "auto">("auto");
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +94,16 @@ export function MagicInput({ onSubmit, isProcessing }: MagicInputProps) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
+    }
+  };
+
+  const handleUndo = async () => {
+    if (isUndoing) return;
+    setIsUndoing(true);
+    try {
+      await onUndo();
+    } finally {
+      setIsUndoing(false);
     }
   };
 
@@ -186,6 +199,28 @@ export function MagicInput({ onSubmit, isProcessing }: MagicInputProps) {
                   </span>
                 )}
               </div>
+
+              {/* Undo button */}
+              {canUndo && !isProcessing && (
+                <button
+                  onClick={handleUndo}
+                  disabled={isUndoing}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-3 h-full
+                             border-l border-border transition-all
+                             text-text-muted hover:text-heat-1 hover:bg-heat-1/5
+                             disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Undo last generation"
+                >
+                  {isUndoing ? (
+                    <span className="animate-pulse text-sm">Undoing...</span>
+                  ) : (
+                    <>
+                      <span className="text-base">&#8634;</span>
+                      <span className="hidden sm:inline text-sm">Undo</span>
+                    </>
+                  )}
+                </button>
+              )}
 
               {/* Send button - right column */}
               <button

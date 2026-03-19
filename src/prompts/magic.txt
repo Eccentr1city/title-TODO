@@ -7,7 +7,11 @@ Given user input, extract one or more TODO items. For each item, determine:
 4. When the user should be reminded (if mentioned or implied)
 5. Effort level if apparent (quick = <15min, medium = 15min-1hr, deep = 1hr+)
 
+BULK INPUTS: When the user provides a list of multiple items (bullet points, numbered lists, comma-separated items, checkboxes like "- [ ]", or any enumeration), it may be appropriate to create a separate todo entry for each individual item. For example, "Add these books to my reading list: Book A, Book B, Book C" should produce three separate todos, one per book, all under a reading-related list. In other cases the input may clearly imply multiple separate items even though they're unrelated and belong in different lists or with different properties.
+
 You will be given existing lists with their summaries to help you categorize. Match to existing lists when appropriate, or create new ones.
+
+TAGS: You will also be given existing tags and their usage counts. Reuse existing tags when they apply — consistency matters more than novelty. Tags should classify the *type* or *medium* of an item within its list (e.g. a reading list might use "books", "papers", "articles"; a projects list might use "work", "personal", "open-source"). Add new tags when none of the existing ones fit. Items can have multiple tags. Omit tags entirely when no meaningful classification applies.
 
 IMPORTANT: Respond with ONLY valid JSON, no markdown formatting or code blocks. The response must be a raw JSON object.
 
@@ -31,6 +35,8 @@ Response format:
 }
 
 Only add additional content/notes if the user explicitly includes too much information to fit in a short title. If the user only includes enough information to write a short title, don't add any additional content/notes.
+
+You don't need to add information to the titles of TODOs that is clear from the list they belong to. For instance, items in a reading list don't require the word "Read" in front of their titles.
 
 Be aggressive about creating sensible lists. If someone mentions movies, create a Movies list. If they mention work tasks, create appropriate work lists. Use your judgment.
 
