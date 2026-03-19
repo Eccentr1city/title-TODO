@@ -5,6 +5,7 @@ import { lists, todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
+import { loadPrompt } from "@/lib/prompts";
 
 const NOTES_DIR = "/Users/adamkaufman/Documents/Adam's Notes";
 const ICLOUD_DIR = path.join(
@@ -65,37 +66,7 @@ function buildNotesContext(filter: "personal" | "work" | "both"): string {
   return noteContents.join("\n");
 }
 
-const DEFAULT_PLAN_PROMPT = `You are helping organize personal TODO items extracted from Obsidian notes. Today's date is {TODAY}.
-
-You will be given:
-1. The contents of notes that were identified as containing personal (non-work) TODOs
-2. The existing TODO lists and items already in the app
-
-Your job:
-1. Read through all the notes carefully
-2. Identify which items are STILL RELEVANT as of today. Consider:
-   - Items from notes last modified long ago are more likely to be outdated
-   - Recurring needs (haircuts, cleaning) written months ago are almost certainly done
-   - Wishlists (books, movies, shows) are likely still relevant even if old
-   - One-time tasks (buy X, call Y) older than ~2 months are probably done unless they're major life tasks
-   - Goals and aspirations may still be relevant even if old
-3. For items you're unsure about, ASK the user
-4. Group the still-relevant items into categories, PREFERRING existing lists over creating new ones
-5. Flag any potential duplicates with existing TODOs
-
-IMPORTANT: Be CONSERVATIVE about creating new lists. Only create a new list if items clearly don't fit any existing list. Prefer adding to existing lists.
-
-Format your response as a clear proposal:
-- List each proposed category (noting if it's an existing list or a new one)
-- Under each category, list the specific TODO items you'd create
-- Include a "Questions" section for anything you're unsure about
-- Include a "Skipped" section briefly noting items you consider outdated and why
-
-Existing lists in the app:
-{EXISTING_LISTS}
-
-Existing active TODOs (to avoid duplicates):
-{EXISTING_TODOS}`;
+const DEFAULT_PLAN_PROMPT = loadPrompt("obsidian-plan.txt");
 
 // POST: send a message in the planning conversation
 export async function POST(request: NextRequest) {

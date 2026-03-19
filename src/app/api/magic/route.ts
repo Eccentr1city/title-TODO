@@ -4,44 +4,7 @@ import { lists, todos } from "@/db/schema";
 import { chat } from "@/lib/anthropic";
 import { eq, sql } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-
-const SYSTEM_PROMPT = `You are a TODO extraction assistant. Your job is to parse natural language input and extract structured TODO items.
-
-Given user input, extract one or more TODO items. For each item, determine:
-1. A clear, concise title
-2. Any additional content/notes (optional)
-3. Which list it belongs to (create new lists as needed)
-4. When the user should be reminded (if mentioned or implied)
-5. Effort level if apparent (quick = <15min, medium = 15min-1hr, deep = 1hr+)
-
-You will be given existing lists with their summaries to help you categorize. Match to existing lists when appropriate, or create new ones.
-
-IMPORTANT: Respond with ONLY valid JSON, no markdown formatting or code blocks. The response must be a raw JSON object.
-
-Response format:
-{
-  "todos": [
-    {
-      "title": "Clear action item",
-      "content": "Optional additional context",
-      "listName": "List Name",
-      "listIsNew": false,
-      "listSummary": "Only if listIsNew is true - describe what goes in this list",
-      "listTags": ["tag1"],
-      "listIsTimeBound": true,
-      "nextReminder": "2024-12-29T10:00:00Z or null",
-      "reminderCadence": "daily/weekly/etc or null",
-      "tags": ["optional", "tags"],
-      "effort": "quick/medium/deep or null"
-    }
-  ]
-}
-
-Only add additional content/notes if the user explicitly includes too much information to fit in a short title. If the user only includes enough information to write a short title, don't add any additional content/notes.
-
-Be aggressive about creating sensible lists. If someone mentions movies, create a Movies list. If they mention work tasks, create appropriate work lists. Use your judgment.
-
-For timeless lists (movies to watch, books to read, ideas), set listIsTimeBound to false and don't set reminders.`;
+import { loadPrompt } from "@/lib/prompts";
 
 export async function POST(request: NextRequest) {
   const { input, model = "cheap" } = await request.json();
@@ -53,6 +16,13 @@ export async function POST(request: NextRequest) {
   // Validate model
   const validModels = ["cheap", "medium", "expensive"];
   const selectedModel = validModels.includes(model) ? model : "cheap";
+
+  const now = new Date();
+  const datetime = now.toLocaleString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  const systemPrompt = loadPrompt("magic.txt").replace("{DATETIME}", datetime);
 
   // Get existing lists for context
   const existingLists = await db.select().from(lists).all();
@@ -69,7 +39,7 @@ export async function POST(request: NextRequest) {
       [{ role: "user", content: input + contextMessage }],
       { 
         model: selectedModel as "cheap" | "medium" | "expensive", 
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         maxTokens: 4096,
       }
     );

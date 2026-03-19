@@ -3,10 +3,7 @@ import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
 import { chat } from "@/lib/anthropic";
 import { eq } from "drizzle-orm";
-
-const SYSTEM_PROMPT = `You are a helpful assistant that can answer questions about a TODO list. You have access to all the items in the list and can help the user find, filter, or get suggestions from them.
-
-Be concise but helpful. When making suggestions, briefly explain your reasoning. If asked to pick or suggest items, consider the context the user provides.`;
+import { loadPrompt } from "@/lib/prompts";
 
 export async function POST(request: NextRequest) {
   const { listId, question } = await request.json();
@@ -53,14 +50,20 @@ ${todosContext || "No items yet"}
 
 ${completedTodos.length > 0 ? `\nCompleted items: ${completedTodos.length}` : ""}`;
 
+  const datetime = new Date().toLocaleString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  const systemPrompt = loadPrompt("ask.txt").replace("{DATETIME}", datetime);
+
   try {
     const response = await chat(
       [
         { role: "user", content: `${context}\n\nUser question: ${question}` },
       ],
       {
-        model: "medium", // Use medium model for better reasoning
-        system: SYSTEM_PROMPT,
+        model: "medium",
+        system: systemPrompt,
         maxTokens: 1024,
       }
     );

@@ -4,41 +4,7 @@ import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-
-const GENERATE_PROMPT = `You are generating structured TODO items for a personal TODO app. Today's date is {TODAY}.
-
-You will be given:
-1. A plan that was agreed upon with the user (which items to create, in which categories)
-2. The existing lists in the app
-
-Your job is to output ONLY valid JSON (no markdown, no code fences) with the exact TODOs to create for the specified category.
-
-Rules:
-- Use an existing list if one matches. Only create a new list if the plan explicitly says to.
-- Set source to "obsidian" for all items
-- For wishlists/timeless items: no reminders, set effort to null
-- For actionable tasks: set reasonable effort estimates and optional reminders
-- Be concise in titles. Put details in content field.
-
-Output format (raw JSON only):
-{
-  "listName": "exact list name",
-  "listIsNew": false,
-  "listSummary": "only if listIsNew is true",
-  "listTags": ["tag"],
-  "listIsTimeBound": true,
-  "todos": [
-    {
-      "title": "concise title",
-      "content": "optional details/notes",
-      "tags": [],
-      "effort": "quick/medium/deep or null",
-      "nextReminder": "ISO date or null",
-      "reminderCadence": "daily/weekly/monthly or null",
-      "sourceRef": "filename.md"
-    }
-  ]
-}`;
+import { loadPrompt } from "@/lib/prompts";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -66,7 +32,7 @@ export async function POST(request: NextRequest) {
   const categoryResponse = await anthropic.messages.create({
     model: MODELS.medium,
     max_tokens: 2048,
-    system: `Extract the list of categories/lists from this TODO plan. Output ONLY a JSON array of category names, no markdown. Example: ["Books to Read", "Shopping", "Home Improvement"]`,
+    system: loadPrompt("obsidian-apply-categories.txt"),
     messages: [{ role: "user", content: plan }],
   });
 
@@ -81,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Generate TODOs for each category in parallel
-  const prompt = GENERATE_PROMPT
+  const prompt = loadPrompt("obsidian-apply-generate.txt")
     .replace("{TODAY}", today);
 
   const results = await Promise.all(

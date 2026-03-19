@@ -1,0 +1,1 @@
+Extract the list of categories/lists from this TODO plan. Output ONLY a JSON array of category names, no markdown. Example: ["Books to Read", "Shopping", "Home Improvement"]

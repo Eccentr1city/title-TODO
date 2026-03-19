@@ -5,6 +5,7 @@ import { lists, todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
+import { loadPrompt } from "@/lib/prompts";
 
 const NOTES_DIR = "/Users/adamkaufman/Documents/Adam's Notes";
 
@@ -55,21 +56,10 @@ export async function POST(request: NextRequest) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const systemPrompt = `You are helping organize personal TODO items from specific Obsidian notes. Today's date is ${today}.
-
-The user has pointed you at specific note files to process into TODOs. Read them carefully and propose TODO items grouped by category, preferring existing lists.
-
-Existing lists:
-${listsContext}
-
-Existing active TODOs (avoid duplicates):
-${todosContext}
-
-Rules:
-- Be CONSERVATIVE about creating new lists — only if items clearly don't fit existing ones
-- Flag potential duplicates with existing TODOs
-- Consider whether items might be outdated based on modification dates
-- Ask the user about anything you're unsure about`;
+  const systemPrompt = loadPrompt("obsidian-manual.txt")
+    .replace("{TODAY}", today)
+    .replace("{EXISTING_LISTS}", listsContext)
+    .replace("{EXISTING_TODOS}", todosContext);
 
   // Inject note contents on first message
   const isFirstMessage = messages.length === 1 && messages[0].role === "user";

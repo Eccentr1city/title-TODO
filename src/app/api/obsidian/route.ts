@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 import fs from "fs";
 import path from "path";
+import { loadPrompt } from "@/lib/prompts";
 
 const NOTES_DIR = "/Users/adamkaufman/Documents/Adam's Notes";
 const ICLOUD_DIR = path.join(
@@ -11,42 +12,7 @@ const ICLOUD_DIR = path.join(
 const STATE_FILE = path.join(ICLOUD_DIR, "obsidian-sync-state.json");
 const RAW_OUTPUTS_FILE = path.join(ICLOUD_DIR, "obsidian-triage-raw-outputs.json");
 
-const WORK_CONTEXT = `The author works on testing AI control methods in a setting called BashArena, and other miscellaneous AI safety projects at Anthropic. Work-related topics include: AI safety, control evaluations, untrusted monitoring, red-teaming, AI alignment research, BashBench, SHADE arena, machine learning experiments, research papers, coding for work projects, and anything involving colleagues or work deadlines.`;
-
-const DEFAULT_TRIAGE_PROMPT = `You are triaging an Obsidian note to determine if it contains items that should be tracked in a TODO app.
-
-${WORK_CONTEXT}
-
-For this note, determine SEPARATELY whether it contains:
-
-1. PERSONAL TODOs: Non-work actionable items such as:
-   - Personal errands, shopping, things to buy/acquire
-   - Wishlists: books to read, movies/shows to watch, restaurants to try, music to listen to
-   - Personal goals, resolutions, health/wellness intentions
-   - Home improvement, moving, room organization tasks
-   - Personal project ideas (creative, hobby, side projects)
-   - Social plans, letters to write, people to contact
-   - Travel plans, personal logistics
-
-2. WORK TODOs: Work/research actionable items such as:
-   - AI safety research tasks, experiments to run
-   - BashArena / control evaluation tasks
-   - Code to write for work, bugs to fix
-   - Papers to write or review
-   - Work meetings to schedule, feedback to give colleagues
-   - Research directions to pursue
-
-Answer NO for both if the note is:
-- Pure journaling, reflection, or stream of consciousness with no actionable items
-- Technical notes or reference material with no remaining tasks
-- Records of past events with no follow-ups
-- Creative writing, essays, or blog drafts (unless the note says "write a blog post about X" as a TODO)
-- Notes that only contain completed/past tasks with nothing remaining
-- Empty or near-empty notes
-- Addresses, keys, credentials, or reference data
-
-Respond with ONLY a JSON object (no markdown, no code fences) in this exact format:
-{"has_personal": true/false, "has_work": true/false, "personal_summary": "brief description of personal TODOs found, or empty string", "work_summary": "brief description of work TODOs found, or empty string"}`;
+const DEFAULT_TRIAGE_PROMPT = loadPrompt("obsidian-triage.txt");
 
 interface SyncState {
   lastRunAt: string;
