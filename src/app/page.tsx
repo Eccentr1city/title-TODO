@@ -9,6 +9,7 @@ import { AskAboutList } from "@/components/AskAboutList";
 import { RefactorLists } from "@/components/RefactorLists";
 import { ObsidianSync } from "@/components/ObsidianSync";
 import { TodoItem, TodoList } from "@/lib/types";
+import { effectivePriority, computeVotePriority, priorityHeatClass } from "@/lib/priority";
 
 // Special view IDs
 const VIEW_INBOX = null;
@@ -330,13 +331,9 @@ export default function Home() {
           return true;
         })
         .sort((a, b) => {
-          // Sort by next reminder (soonest first), nulls last
-          if (!a.nextReminder && !b.nextReminder) {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          }
-          if (!a.nextReminder) return 1;
-          if (!b.nextReminder) return -1;
-          return new Date(a.nextReminder).getTime() - new Date(b.nextReminder).getTime();
+          const diff = effectivePriority(b) - effectivePriority(a);
+          if (Math.abs(diff) > 0.001) return diff;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
 
   const inboxCount = todos.filter((t) => {
@@ -348,6 +345,24 @@ export default function Home() {
     return true;
   }).length;
   const completedCount = completedTodos.length;
+
+  // Handle priority vote
+  const handleVote = async (id: string, direction: "up" | "down") => {
+    const todo = todos.find((t) => t.id === id);
+    if (!todo) return;
+
+    const newManualPriority = computeVotePriority(todo, direction, displayedTodos);
+
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, manualPriority: newManualPriority } : t))
+    );
+
+    await fetch(`/api/todos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ manualPriority: newManualPriority }),
+    });
+  };
 
   // Get view title
   const getViewTitle = () => {
@@ -543,6 +558,8 @@ export default function Home() {
                         onSnooze={handleSnooze}
                         onEdit={setEditingTodo}
                         onDelete={handleDelete}
+                        onVote={handleVote}
+                        priorityHeat={priorityHeatClass(effectivePriority(todo))}
                         showListName={
                           (selectedView === null || isCompletedView)
                             ? lists.find((l) => l.id === todo.listId)?.name

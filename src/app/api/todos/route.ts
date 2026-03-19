@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       nextReminder: todo.nextReminder?.toISOString() || null,
       completedAt: todo.completedAt?.toISOString() || null,
       tags: todo.tags || [],
+      manualPriority: todo.manualPriority ?? 0,
     }))
   );
 }

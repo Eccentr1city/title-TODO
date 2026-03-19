@@ -36,6 +36,7 @@ export async function PATCH(
   }
   if (body.tags !== undefined) updates.tags = body.tags;
   if (body.effort !== undefined) updates.effort = body.effort;
+  if (body.manualPriority !== undefined) updates.manualPriority = body.manualPriority;
 
   await db.update(todos).set(updates).where(eq(todos.id, id));
 
@@ -75,6 +76,7 @@ export async function PATCH(
     nextReminder: updated.nextReminder?.toISOString() || null,
     completedAt: updated.completedAt?.toISOString() || null,
     tags: updated.tags || [],
+    manualPriority: updated.manualPriority ?? 0,
   });
 }
 

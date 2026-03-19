@@ -58,4 +58,12 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_todos_next_reminder ON todos(next_reminder);
 `);
 
+// Migrations for existing databases
+const columns = sqlite.pragma("table_info(todos)") as { name: string }[];
+const columnNames = new Set(columns.map((c) => c.name));
+
+if (!columnNames.has("manual_priority")) {
+  sqlite.exec("ALTER TABLE todos ADD COLUMN manual_priority REAL NOT NULL DEFAULT 0");
+}
+
 

@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
         sourceRef: null,
         tags: item.tags || [],
         effort: item.effort || null,
+        manualPriority: 0,
       };
 
       await db.insert(todos).values(newTodo);

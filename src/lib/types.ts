@@ -14,6 +14,7 @@ export interface TodoItem {
   sourceRef: string | null;
   tags: string[];
   effort: "quick" | "medium" | "deep" | null;
+  manualPriority: number;
 }
 
 export interface TodoList {

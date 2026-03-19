@@ -9,6 +9,8 @@ interface TodoCardProps {
   onSnooze: (id: string, until: Date) => void;
   onEdit: (todo: TodoItem) => void;
   onDelete: (id: string) => void;
+  onVote?: (id: string, direction: "up" | "down") => void;
+  priorityHeat?: string;
   showListName?: string;
 }
 
@@ -20,7 +22,7 @@ const SNOOZE_OPTIONS = [
   { label: "+1 week", hours: 168 },
 ];
 
-export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, showListName }: TodoCardProps) {
+export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote, priorityHeat, showListName }: TodoCardProps) {
   const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
   const snoozeRef = useRef<HTMLDivElement>(null);
 
@@ -65,10 +67,33 @@ export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, showLis
 
   return (
     <div 
-      className={`incandescent-card p-4 animate-fade-in
-                  ${todo.status === "completed" ? "opacity-50" : ""}`}
+      className={`incandescent-card p-4 animate-fade-in transition-all
+                  ${todo.status === "completed" ? "opacity-50" : ""}
+                  ${priorityHeat || ""}`}
     >
       <div className="flex items-start gap-3">
+        {/* Vote arrows */}
+        {onVote && todo.status !== "completed" && (
+          <div className="flex flex-col items-center flex-shrink-0 -my-1">
+            <button
+              onClick={() => onVote(todo.id, "up")}
+              className="text-[11px] leading-none px-1 py-1 text-text-faint
+                         hover:text-accent transition-colors"
+              aria-label="Increase priority"
+            >
+              &#9650;
+            </button>
+            <button
+              onClick={() => onVote(todo.id, "down")}
+              className="text-[11px] leading-none px-1 py-1 text-text-faint
+                         hover:text-text-muted transition-colors"
+              aria-label="Decrease priority"
+            >
+              &#9660;
+            </button>
+          </div>
+        )}
+
         {/* Checkbox */}
         <input
           type="checkbox"
