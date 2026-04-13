@@ -8,9 +8,10 @@ interface SidebarProps {
   onSelectView: (view: string | null) => void;
   inboxCount: number;
   completedCount: number;
+  highlightedListIds?: Set<string>;
 }
 
-export function Sidebar({ lists, selectedView, onSelectView, inboxCount, completedCount }: SidebarProps) {
+export function Sidebar({ lists, selectedView, onSelectView, inboxCount, completedCount, highlightedListIds }: SidebarProps) {
   // Group lists by their first tag
   const groupedLists = lists.reduce((acc, list) => {
     const tag = list.tags[0] || "ungrouped";
@@ -88,7 +89,8 @@ export function Sidebar({ lists, selectedView, onSelectView, inboxCount, complet
                            transition-all duration-150
                            ${selectedView === list.id
                              ? "bg-background-tertiary text-accent glow-text"
-                             : "hover:bg-background-tertiary text-text-normal"}`}
+                             : "hover:bg-background-tertiary text-text-normal"}
+                           ${highlightedListIds?.has(list.id) ? "sidebar-highlight" : ""}`}
               >
                 <span className="flex items-center gap-2 truncate">
                   <span className="text-text-faint">{list.isTimeBound ? "-" : "*"}</span>

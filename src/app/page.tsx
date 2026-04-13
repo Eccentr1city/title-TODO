@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MagicInput } from "@/components/MagicInput";
 import { Sidebar } from "@/components/Sidebar";
 import { TodoCard } from "@/components/TodoCard";
@@ -16,6 +16,7 @@ const VIEW_INBOX = null;
 const VIEW_COMPLETED = "__completed__";
 const VIEW_REFACTOR = "__refactor__";
 const VIEW_OBSIDIAN = "__obsidian__";
+const VIEW_SEARCH = "__search__";
 
 interface InboxFilter {
   mode: "blacklist" | "whitelist";
@@ -36,6 +37,39 @@ export default function Home() {
   } | null>(null);
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>({ mode: "blacklist", listIds: [] });
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [highlightedTodoIds, setHighlightedTodoIds] = useState<Set<string>>(new Set());
+  const [highlightedListIds, setHighlightedListIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const viewBeforeSearchRef = useRef<string | null>(VIEW_INBOX);
+  const [successToast, setSuccessToast] = useState<{ message: string; visible: boolean; exiting: boolean } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const showSuccessNotification = useCallback((todoCount: number, listNames: string[], newListCount: number, affectedListIds: string[], newTodoIds: string[]) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+
+    const parts: string[] = [];
+    if (todoCount > 0) parts.push(`${todoCount} note${todoCount !== 1 ? "s" : ""} created`);
+    if (newListCount > 0) parts.push(`${newListCount} new list${newListCount !== 1 ? "s" : ""}`);
+
+    const listSummary = listNames.length > 0
+      ? ` in ${listNames.length <= 2 ? listNames.join(" & ") : `${listNames.length} lists`}`
+      : "";
+
+    setHighlightedTodoIds(new Set(newTodoIds));
+    setHighlightedListIds(new Set(affectedListIds));
+    setSuccessToast({ message: parts.join(", ") + listSummary, visible: true, exiting: false });
+
+    toastTimerRef.current = setTimeout(() => {
+      setSuccessToast((prev) => prev ? { ...prev, exiting: true } : null);
+      setTimeout(() => {
+        setSuccessToast(null);
+        setHighlightedTodoIds(new Set());
+        setHighlightedListIds(new Set());
+      }, 300);
+    }, 3500);
+  }, []);
 
   // Fetch initial data
   const fetchData = useCallback(async () => {
@@ -206,6 +240,19 @@ export default function Home() {
         listIds: (data.lists || []).map((l: TodoList) => l.id),
         todoListMap,
       });
+
+      const todoCount = (data.todos || []).length;
+      const newListCount = (data.lists || []).length;
+      const affectedListIds = [...new Set((data.todos || []).map((t: TodoItem) => t.listId))] as string[];
+      const allLists = [...lists, ...(data.lists || [])];
+      const listNames = affectedListIds.map(
+        (id: string) => allLists.find((l) => l.id === id)?.name || "Unknown"
+      );
+      const newTodoIds = (data.todos || []).map((t: TodoItem) => t.id);
+
+      if (todoCount > 0) {
+        showSuccessNotification(todoCount, listNames, newListCount, affectedListIds, newTodoIds);
+      }
     } catch (error) {
       console.error("Magic input error:", error);
     } finally {
@@ -370,42 +417,56 @@ export default function Home() {
   };
 
   // Determine what to display
+  const isSearchView = selectedView === VIEW_SEARCH;
   const isCompletedView = selectedView === VIEW_COMPLETED;
   const isRefactorView = selectedView === VIEW_REFACTOR;
   const isObsidianView = selectedView === VIEW_OBSIDIAN;
   const isListView = selectedView && !selectedView.startsWith("__");
   const selectedList = isListView ? lists.find((l) => l.id === selectedView) : null;
 
+  // Search helper
+  const matchesSearch = useCallback((todo: TodoItem, query: string) => {
+    const q = query.toLowerCase();
+    if (todo.title.toLowerCase().includes(q)) return true;
+    if (todo.content?.toLowerCase().includes(q)) return true;
+    if (todo.tags?.some((t) => t.toLowerCase().includes(q))) return true;
+    const listName = lists.find((l) => l.id === todo.listId)?.name;
+    if (listName?.toLowerCase().includes(q)) return true;
+    return false;
+  }, [lists]);
+
   // Filter and sort todos
-  const displayedTodos = isCompletedView
-    ? completedTodos.sort((a, b) => {
-        // Sort by completedAt (most recent first)
-        if (!a.completedAt && !b.completedAt) return 0;
-        if (!a.completedAt) return 1;
-        if (!b.completedAt) return -1;
-        return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
-      })
-    : todos
-        .filter((todo) => {
-          if (isListView) {
-            return todo.listId === selectedView && todo.status === "active";
-          }
-          // Inbox: show active todos, applying filter
-          if (todo.status !== "active") return false;
-          if (inboxFilter.listIds.length > 0) {
-            if (inboxFilter.mode === "blacklist") {
-              return !inboxFilter.listIds.includes(todo.listId);
-            } else {
-              return inboxFilter.listIds.includes(todo.listId);
-            }
-          }
-          return true;
+  const displayedTodos = isSearchView && searchQuery.trim()
+    ? [...todos, ...completedTodos]
+        .filter((todo) => matchesSearch(todo, searchQuery.trim()))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    : isCompletedView
+      ? completedTodos.sort((a, b) => {
+          if (!a.completedAt && !b.completedAt) return 0;
+          if (!a.completedAt) return 1;
+          if (!b.completedAt) return -1;
+          return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
         })
-        .sort((a, b) => {
-          const diff = effectivePriority(b) - effectivePriority(a);
-          if (Math.abs(diff) > 0.001) return diff;
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
+      : todos
+          .filter((todo) => {
+            if (isListView) {
+              return todo.listId === selectedView && todo.status === "active";
+            }
+            if (todo.status !== "active") return false;
+            if (inboxFilter.listIds.length > 0) {
+              if (inboxFilter.mode === "blacklist") {
+                return !inboxFilter.listIds.includes(todo.listId);
+              } else {
+                return inboxFilter.listIds.includes(todo.listId);
+              }
+            }
+            return true;
+          })
+          .sort((a, b) => {
+            const diff = effectivePriority(b) - effectivePriority(a);
+            if (Math.abs(diff) > 0.001) return diff;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
 
   const inboxCount = todos.filter((t) => {
     if (t.status !== "active") return false;
@@ -435,8 +496,39 @@ export default function Home() {
     });
   };
 
+  const openSearch = useCallback(() => {
+    if (!searchOpen) {
+      viewBeforeSearchRef.current = selectedView;
+      setSearchOpen(true);
+      setSelectedView(VIEW_SEARCH);
+      setTimeout(() => searchInputRef.current?.focus(), 0);
+    }
+  }, [searchOpen, selectedView]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSelectedView(viewBeforeSearchRef.current);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        if (searchOpen) closeSearch();
+        else openSearch();
+      }
+      if (e.key === "Escape" && searchOpen) {
+        closeSearch();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [searchOpen, openSearch, closeSearch]);
+
   // Get view title
   const getViewTitle = () => {
+    if (isSearchView) return "Search";
     if (isCompletedView) return "Completed";
     if (isRefactorView) return "Refactor Lists";
     if (isObsidianView) return "Sync Obsidian Notes";
@@ -449,6 +541,10 @@ export default function Home() {
   const handleSelectView = (view: string | null) => {
     setSelectedView(view);
     setSidebarOpen(false);
+    if (searchOpen) {
+      setSearchOpen(false);
+      setSearchQuery("");
+    }
   };
 
   return (
@@ -475,6 +571,7 @@ export default function Home() {
             onSelectView={handleSelectView}
             inboxCount={inboxCount}
             completedCount={completedCount}
+            highlightedListIds={highlightedListIds}
           />
         </div>
 
@@ -489,18 +586,59 @@ export default function Home() {
             >
               &#9776;
             </button>
-            <div className="flex-1">
-              <h2 className="text-xl heat-2">{getViewTitle()}</h2>
-              {selectedList && (
-                <p className="text-sm text-text-muted mt-1">{selectedList.summary}</p>
-              )}
-              {isCompletedView && (
-                <p className="text-sm text-text-muted mt-1">
-                  {completedCount} completed items
-                </p>
-              )}
-            </div>
-            {selectedView === null && (
+            {searchOpen ? (
+              <div className="flex-1 flex items-center gap-3">
+                <span className="text-text-faint text-sm">&#8981;</span>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search notes..."
+                  className="flex-1 bg-transparent text-text-normal placeholder:text-text-faint
+                             outline-none text-base"
+                  autoFocus
+                />
+                {searchQuery && (
+                  <span className="text-xs text-text-faint whitespace-nowrap">
+                    {displayedTodos.length} result{displayedTodos.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+                <button
+                  onClick={closeSearch}
+                  className="text-text-muted hover:text-accent transition-colors text-sm px-2 py-1"
+                >
+                  Esc
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1">
+                  <h2 className="text-xl heat-2">{getViewTitle()}</h2>
+                  {selectedList && (
+                    <p className="text-sm text-text-muted mt-1">{selectedList.summary}</p>
+                  )}
+                  {isCompletedView && (
+                    <p className="text-sm text-text-muted mt-1">
+                      {completedCount} completed items
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={openSearch}
+                  className="flex-shrink-0 text-text-muted hover:text-accent transition-colors
+                             text-sm px-2 py-1 flex items-center gap-1.5"
+                  title="Search (Cmd+K)"
+                >
+                  <span>&#8981;</span>
+                  <span className="hidden sm:inline">Search</span>
+                  <kbd className="hidden md:inline text-[10px] text-text-faint border border-border px-1.5 py-0.5 ml-1">
+                    &#8984;K
+                  </kbd>
+                </button>
+              </>
+            )}
+            {!searchOpen && selectedView === null && (
               <div className="relative flex-shrink-0">
                 <button
                   onClick={() => setShowFilterMenu(!showFilterMenu)}
@@ -613,9 +751,15 @@ export default function Home() {
               <div className="flex-1 overflow-y-auto p-4">
                 {displayedTodos.length === 0 ? (
                   <div className="text-center py-12 text-text-muted">
-                    <p className="text-4xl mb-4">*</p>
-                    <p>{isCompletedView ? "No completed items yet." : "No items yet."}</p>
-                    {!isCompletedView && (
+                    <p className="text-4xl mb-4">{isSearchView ? "&#8981;" : "*"}</p>
+                    <p>
+                      {isSearchView
+                        ? (searchQuery.trim() ? "No matching notes." : "Start typing to search...")
+                        : isCompletedView
+                          ? "No completed items yet."
+                          : "No items yet."}
+                    </p>
+                    {!isCompletedView && !isSearchView && (
                       <p className="text-sm mt-2">Type something in the box below!</p>
                     )}
                   </div>
@@ -632,10 +776,11 @@ export default function Home() {
                         onVote={handleVote}
                         priorityHeat={priorityHeatClass(effectivePriority(todo))}
                         showListName={
-                          (selectedView === null || isCompletedView)
+                          (selectedView === null || isCompletedView || isSearchView)
                             ? lists.find((l) => l.id === todo.listId)?.name
                             : undefined
                         }
+                        isHighlighted={highlightedTodoIds.has(todo.id)}
                       />
                     ))}
                   </div>
@@ -652,6 +797,17 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* Success Toast */}
+      {successToast && (
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50
+                        px-5 py-3 bg-background-tertiary border border-accent/40
+                        text-accent text-sm shadow-glow
+                        ${successToast.exiting ? "toast-exit" : "toast-enter"}`}>
+          <span className="mr-2">&#10003;</span>
+          {successToast.message}
+        </div>
+      )}
 
       {/* Magic Input - Bottom */}
       <footer className="flex-shrink-0 border-t border-border">

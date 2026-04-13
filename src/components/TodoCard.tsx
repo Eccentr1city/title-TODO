@@ -12,6 +12,7 @@ interface TodoCardProps {
   onVote?: (id: string, direction: "up" | "down") => void;
   priorityHeat?: string;
   showListName?: string;
+  isHighlighted?: boolean;
 }
 
 const SNOOZE_OPTIONS = [
@@ -22,7 +23,7 @@ const SNOOZE_OPTIONS = [
   { label: "+1 week", hours: 168 },
 ];
 
-export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote, priorityHeat, showListName }: TodoCardProps) {
+export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote, priorityHeat, showListName, isHighlighted }: TodoCardProps) {
   const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
   const snoozeRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +70,8 @@ export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote,
     <div 
       className={`incandescent-card p-4 animate-fade-in transition-all
                   ${todo.status === "completed" ? "opacity-50" : ""}
-                  ${priorityHeat || ""}`}
+                  ${priorityHeat || ""}
+                  ${isHighlighted ? "highlight-new" : ""}`}
     >
       <div className="flex items-start gap-3">
         {/* Vote arrows */}
