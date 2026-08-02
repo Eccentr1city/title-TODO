@@ -17,10 +17,9 @@ interface TodoCardProps {
 
 const SNOOZE_OPTIONS = [
   { label: "+1 hour", hours: 1 },
-  { label: "+3 hours", hours: 3 },
   { label: "+1 day", hours: 24 },
-  { label: "+3 days", hours: 72 },
   { label: "+1 week", hours: 168 },
+  { label: "+1 month", hours: 720 },
 ];
 
 export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote, priorityHeat, showListName, isHighlighted }: TodoCardProps) {
