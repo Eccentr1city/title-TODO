@@ -179,20 +179,20 @@ input[type="checkbox"]:checked::after {
   font-size: 12px;
 }
 
-/* Magic glow border — animated gradient that orbits the input box */
+/* Magic glow border — animated gradient that orbits the input box.
+   Conic (not linear) so the highlight actually orbits, with wide soft lobes
+   and a slow rotation so the sweep reads as smooth on a wide, short box. */
 .magic-glow-border {
   position: relative;
-  background: linear-gradient(
-    var(--glow-angle, 0deg),
-    var(--accent) 0%,
-    transparent 20%,
-    transparent 40%,
-    rgba(255, 170, 85, 0.35) 50%,
-    transparent 60%,
-    transparent 80%,
-    var(--accent) 100%
+  background: conic-gradient(
+    from var(--glow-angle, 0deg),
+    rgba(255, 170, 85, 0.1),
+    var(--accent) 25%,
+    rgba(255, 170, 85, 0.1) 50%,
+    rgba(255, 170, 85, 0.4) 75%,
+    rgba(255, 170, 85, 0.1)
   );
-  animation: magic-rotate 4s linear infinite;
+  animation: magic-rotate 10s linear infinite;
 }
 
 .magic-glow-border::before {
