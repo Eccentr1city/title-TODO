@@ -42,7 +42,7 @@ Creates new list(s) and moves the specified items into them. Items NOT listed in
 Does NOT create or delete any lists. Just reassigns items.
 - "listIds": exactly 1 list ID (the source)
 - "targetListId": the destination list ID (must already exist)
-- "itemTitles": array of item titles to move (matched case-insensitively)
+- "itemTitles": array of item titles to move (matched case-insensitively). Omit or leave empty to move ALL items from the source list.
 ```
 {"action": "move", "listIds": ["source-id"], "targetListId": "dest-id", "itemTitles": ["item A"]}
 ```

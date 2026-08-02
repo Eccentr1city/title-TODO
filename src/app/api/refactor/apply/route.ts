@@ -171,7 +171,6 @@ async function applyAction(action: RefactorAction) {
     case "move": {
       if (listIds.length !== 1) throw new Error("Move requires exactly 1 source list");
       if (!action.targetListId) throw new Error("Move requires a targetListId");
-      if (!action.itemTitles || action.itemTitles.length === 0) throw new Error("Move requires itemTitles");
 
       const srcList = db.select().from(lists).where(eq(lists.id, listIds[0])).get();
       const dstList = db.select().from(lists).where(eq(lists.id, action.targetListId)).get();
@@ -179,8 +178,12 @@ async function applyAction(action: RefactorAction) {
       if (!dstList) throw new Error("Target list not found");
 
       const srcItems = db.select().from(todos).where(eq(todos.listId, listIds[0])).all();
-      const titleSet = new Set(action.itemTitles.map((t) => t.toLowerCase()));
-      const toMove = srcItems.filter((item) => titleSet.has(item.title.toLowerCase()));
+      // Omitted/empty itemTitles means "move everything"
+      const moveAll = !action.itemTitles || action.itemTitles.length === 0;
+      const titleSet = new Set((action.itemTitles || []).map((t) => t.toLowerCase()));
+      const toMove = moveAll
+        ? srcItems
+        : srcItems.filter((item) => titleSet.has(item.title.toLowerCase()));
 
       if (toMove.length > 0) {
         const moveIds = toMove.map((i) => i.id);
