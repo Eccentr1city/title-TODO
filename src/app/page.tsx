@@ -21,8 +21,13 @@ const VIEW_SEARCH = "__search__";
 
 interface InboxFilter {
   mode: "blacklist" | "whitelist";
-  listIds: string[];
+  blacklistIds: string[];
+  whitelistIds: string[];
 }
+
+// The selection for whichever mode is currently active
+const activeFilterIds = (f: InboxFilter) =>
+  f.mode === "blacklist" ? f.blacklistIds : f.whitelistIds;
 
 export default function Home() {
   const [lists, setLists] = useState<TodoList[]>([]);
@@ -36,7 +41,7 @@ export default function Home() {
     listIds: string[];
     todoListMap: Record<string, string>;
   } | null>(null);
-  const [inboxFilter, setInboxFilter] = useState<InboxFilter>({ mode: "blacklist", listIds: [] });
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>({ mode: "blacklist", blacklistIds: [], whitelistIds: [] });
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [highlightedTodoIds, setHighlightedTodoIds] = useState<Set<string>>(new Set());
   const [highlightedListIds, setHighlightedListIds] = useState<Set<string>>(new Set());
@@ -114,10 +119,14 @@ export default function Home() {
   };
 
   const toggleListFilter = (listId: string) => {
-    const newIds = inboxFilter.listIds.includes(listId)
-      ? inboxFilter.listIds.filter((id) => id !== listId)
-      : [...inboxFilter.listIds, listId];
-    updateFilter({ ...inboxFilter, listIds: newIds });
+    const current = activeFilterIds(inboxFilter);
+    const newIds = current.includes(listId)
+      ? current.filter((id) => id !== listId)
+      : [...current, listId];
+    updateFilter({
+      ...inboxFilter,
+      [inboxFilter.mode === "blacklist" ? "blacklistIds" : "whitelistIds"]: newIds,
+    });
   };
 
   useEffect(() => {
@@ -454,11 +463,12 @@ export default function Home() {
               return todo.listId === selectedView && todo.status === "active";
             }
             if (todo.status !== "active") return false;
-            if (inboxFilter.listIds.length > 0) {
+            const filterIds = activeFilterIds(inboxFilter);
+            if (filterIds.length > 0) {
               if (inboxFilter.mode === "blacklist") {
-                return !inboxFilter.listIds.includes(todo.listId);
+                return !filterIds.includes(todo.listId);
               } else {
-                return inboxFilter.listIds.includes(todo.listId);
+                return filterIds.includes(todo.listId);
               }
             }
             return true;
@@ -482,9 +492,10 @@ export default function Home() {
 
   const inboxCount = todos.filter((t) => {
     if (t.status !== "active") return false;
-    if (inboxFilter.listIds.length > 0) {
-      if (inboxFilter.mode === "blacklist") return !inboxFilter.listIds.includes(t.listId);
-      return inboxFilter.listIds.includes(t.listId);
+    const filterIds = activeFilterIds(inboxFilter);
+    if (filterIds.length > 0) {
+      if (inboxFilter.mode === "blacklist") return !filterIds.includes(t.listId);
+      return filterIds.includes(t.listId);
     }
     return true;
   }).length;
@@ -656,13 +667,13 @@ export default function Home() {
                 <button
                   onClick={() => setShowFilterMenu(!showFilterMenu)}
                   className={`text-sm px-3 py-1.5 transition-colors ${
-                    inboxFilter.listIds.length > 0
+                    activeFilterIds(inboxFilter).length > 0
                       ? "text-accent border border-accent/30"
                       : "text-text-muted hover:text-text-normal"
                   }`}
                 >
-                  {inboxFilter.listIds.length > 0
-                    ? `filter (${inboxFilter.listIds.length})`
+                  {activeFilterIds(inboxFilter).length > 0
+                    ? `filter (${activeFilterIds(inboxFilter).length})`
                     : "filter"}
                 </button>
                 {showFilterMenu && (
@@ -716,9 +727,9 @@ export default function Home() {
                             className="w-full text-left px-4 py-3 md:px-3 md:py-2 text-sm flex items-center gap-3 hover:bg-background-tertiary active:bg-background-tertiary"
                           >
                             <span className={`w-5 text-center ${
-                              inboxFilter.listIds.includes(list.id) ? "text-accent" : "text-text-faint"
+                              activeFilterIds(inboxFilter).includes(list.id) ? "text-accent" : "text-text-faint"
                             }`}>
-                              {inboxFilter.listIds.includes(list.id) ? "x" : "-"}
+                              {activeFilterIds(inboxFilter).includes(list.id) ? "x" : "-"}
                             </span>
                             <span className="truncate flex-1">{list.name}</span>
                             <span className="text-xs text-text-faint">
@@ -727,10 +738,15 @@ export default function Home() {
                           </button>
                         ))}
                       </div>
-                      {inboxFilter.listIds.length > 0 && (
+                      {activeFilterIds(inboxFilter).length > 0 && (
                         <div className="p-3 border-t border-border pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                           <button
-                            onClick={() => updateFilter({ ...inboxFilter, listIds: [] })}
+                            onClick={() =>
+                              updateFilter({
+                                ...inboxFilter,
+                                [inboxFilter.mode === "blacklist" ? "blacklistIds" : "whitelistIds"]: [],
+                              })
+                            }
                             className="text-xs text-text-muted hover:text-accent w-full text-center py-1"
                           >
                             Clear filter

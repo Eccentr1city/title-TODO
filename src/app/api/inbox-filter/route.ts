@@ -8,16 +8,36 @@ const ICLOUD_DIR = path.join(
 );
 const FILTER_FILE = path.join(ICLOUD_DIR, "inbox-filter.json");
 
+// Each mode keeps its own selection so switching between "Hide selected" and
+// "Show only selected" doesn't clobber the other's list.
 interface InboxFilter {
   mode: "blacklist" | "whitelist";
-  listIds: string[];
+  blacklistIds: string[];
+  whitelistIds: string[];
 }
 
+const DEFAULT_FILTER: InboxFilter = { mode: "blacklist", blacklistIds: [], whitelistIds: [] };
+
 function loadFilter(): InboxFilter {
-  if (fs.existsSync(FILTER_FILE)) {
-    return JSON.parse(fs.readFileSync(FILTER_FILE, "utf-8"));
+  if (!fs.existsSync(FILTER_FILE)) return DEFAULT_FILTER;
+  try {
+    const raw = JSON.parse(fs.readFileSync(FILTER_FILE, "utf-8"));
+    // Migrate the old {mode, listIds} shape: assign listIds to the active mode
+    if (Array.isArray(raw.listIds)) {
+      return {
+        mode: raw.mode === "whitelist" ? "whitelist" : "blacklist",
+        blacklistIds: raw.mode === "blacklist" ? raw.listIds : [],
+        whitelistIds: raw.mode === "whitelist" ? raw.listIds : [],
+      };
+    }
+    return {
+      mode: raw.mode === "whitelist" ? "whitelist" : "blacklist",
+      blacklistIds: Array.isArray(raw.blacklistIds) ? raw.blacklistIds : [],
+      whitelistIds: Array.isArray(raw.whitelistIds) ? raw.whitelistIds : [],
+    };
+  } catch {
+    return DEFAULT_FILTER;
   }
-  return { mode: "blacklist", listIds: [] };
 }
 
 function saveFilter(filter: InboxFilter) {
@@ -32,7 +52,12 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  const filter = (await request.json()) as InboxFilter;
+  const body = await request.json();
+  const filter: InboxFilter = {
+    mode: body.mode === "whitelist" ? "whitelist" : "blacklist",
+    blacklistIds: Array.isArray(body.blacklistIds) ? body.blacklistIds : [],
+    whitelistIds: Array.isArray(body.whitelistIds) ? body.whitelistIds : [],
+  };
   saveFilter(filter);
   return NextResponse.json(filter);
 }
