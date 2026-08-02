@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { anthropic, MODELS } from "@/lib/anthropic";
+import { NextRequest } from "next/server";
+import { streamChatResponse } from "@/lib/chat-stream";
 import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -33,10 +33,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (noteContents.length === 0) {
-    return NextResponse.json({
-      response: `Could not find any of the specified files. Not found: ${notFound.join(", ")}`,
-      notFound,
-    });
+    // Client reads plain text — keep this consistent with the stream format
+    return new Response(
+      `Could not find any of the specified files. Not found: ${notFound.join(", ")}`,
+      { headers: { "content-type": "text/plain; charset=utf-8" } }
+    );
   }
 
   // Get existing context
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
   const existingTodos = db.select().from(todos).where(eq(todos.status, "active")).all();
 
   const listsContext = existingLists
-    .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || ""} [${l.itemCount} items]`)
+    .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || ""} [${existingTodos.filter((t) => t.listId === l.id).length} items]`)
     .join("\n") || "(none)";
 
   const todosContext = existingTodos
@@ -74,31 +75,12 @@ export async function POST(request: NextRequest) {
     ];
   }
 
-  try {
-    const response = await anthropic.messages.create({
-      model: MODELS.medium,
-      max_tokens: 16000,
-      output_config: { effort: "medium" },
-      system: systemPrompt,
-      messages: messagesForApi,
-    });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    const text = textBlock?.type === "text" ? textBlock.text : "";
-
-    return NextResponse.json({
-      response: text,
-      notFound,
-      usage: {
-        input_tokens: response.usage.input_tokens,
-        output_tokens: response.usage.output_tokens,
-      },
-    });
-  } catch (error) {
-    console.error("Manual obsidian error:", error);
-    return NextResponse.json(
-      { error: "Failed to get response" },
-      { status: 500 }
-    );
-  }
+  return streamChatResponse({
+    model: "medium",
+    system: systemPrompt,
+    messages: messagesForApi,
+    maxTokens: 64000,
+    effort: "medium",
+    prefix: notFound.length > 0 ? `[Could not find: ${notFound.join(", ")}]\n\n` : undefined,
+  });
 }

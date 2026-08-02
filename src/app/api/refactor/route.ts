@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       return `List: "${list.name}" (ID: ${list.id})
   Summary: ${list.summary || "No summary"}
   Tags: ${list.tags?.length ? list.tags.join(", ") : "none"}
-  Items: ${list.itemCount}
+  Items: ${samples.length}
   Time-bound: ${list.isTimeBound ? "yes" : "no (timeless)"}
   Sample items: ${samples.length > 0 ? samples.join("; ") : "none"}`;
     })

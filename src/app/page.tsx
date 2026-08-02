@@ -10,6 +10,7 @@ import { RefactorLists } from "@/components/RefactorLists";
 import { ObsidianSync } from "@/components/ObsidianSync";
 import { TodoItem, TodoList } from "@/lib/types";
 import { effectivePriority, computeVotePriority, priorityHeatClass } from "@/lib/priority";
+import { readTextStream } from "@/lib/stream-client";
 
 // Special view IDs
 const VIEW_INBOX = null;
@@ -394,8 +395,11 @@ export default function Home() {
     }
   };
 
-  // Handle ask about list
-  const handleAskAboutList = async (question: string): Promise<string> => {
+  // Handle ask about list — streams the answer via onUpdate as it generates
+  const handleAskAboutList = async (
+    question: string,
+    onUpdate?: (text: string) => void
+  ): Promise<string> => {
     if (!selectedView || selectedView.startsWith("__")) return "Please select a list first.";
 
     const res = await fetch("/api/ask", {
@@ -404,10 +408,7 @@ export default function Home() {
       body: JSON.stringify({ listId: selectedView, question }),
     });
 
-    if (!res.ok) throw new Error("Failed to get response");
-
-    const data = await res.json();
-    return data.response;
+    return readTextStream(res, (text) => onUpdate?.(text));
   };
 
   // Handle refactor complete
@@ -467,6 +468,17 @@ export default function Home() {
             if (Math.abs(diff) > 0.001) return diff;
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
+
+  // "Due now" — snoozed/reminded items whose reminder time has passed get
+  // surfaced in their own section at the top of the Inbox.
+  const isPlainInbox = selectedView === null && !isSearchView;
+  const dueNowTodos = isPlainInbox
+    ? displayedTodos.filter(
+        (t) => t.nextReminder && new Date(t.nextReminder).getTime() <= Date.now()
+      )
+    : [];
+  const dueNowIds = new Set(dueNowTodos.map((t) => t.id));
+  const regularTodos = displayedTodos.filter((t) => !dueNowIds.has(t.id));
 
   const inboxCount = todos.filter((t) => {
     if (t.status !== "active") return false;
@@ -766,7 +778,31 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="space-y-3 max-w-2xl mx-auto md:mx-0">
-                    {displayedTodos.map((todo) => (
+                    {dueNowTodos.length > 0 && (
+                      <>
+                        <div className="text-xs uppercase tracking-widest text-error pt-1">
+                          ! Due now
+                        </div>
+                        {dueNowTodos.map((todo) => (
+                          <TodoCard
+                            key={todo.id}
+                            todo={todo}
+                            onComplete={handleComplete}
+                            onSnooze={handleSnooze}
+                            onEdit={setEditingTodo}
+                            onDelete={handleDelete}
+                            onVote={handleVote}
+                            priorityHeat={priorityHeatClass(effectivePriority(todo))}
+                            showListName={lists.find((l) => l.id === todo.listId)?.name}
+                            isHighlighted={highlightedTodoIds.has(todo.id)}
+                          />
+                        ))}
+                        <div className="text-xs uppercase tracking-widest text-text-faint pt-3">
+                          Everything else
+                        </div>
+                      </>
+                    )}
+                    {regularTodos.map((todo) => (
                       <TodoCard
                         key={todo.id}
                         todo={todo}

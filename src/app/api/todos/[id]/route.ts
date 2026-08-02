@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { todos, lists } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { todos } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function PATCH(
   request: NextRequest,
@@ -40,32 +40,7 @@ export async function PATCH(
 
   await db.update(todos).set(updates).where(eq(todos.id, id));
 
-  // Handle list item count changes
-  if (body.listId && body.listId !== currentTodo.listId) {
-    // Decrement old list count
-    await db
-      .update(lists)
-      .set({ itemCount: sql`${lists.itemCount} - 1` })
-      .where(eq(lists.id, currentTodo.listId));
-    // Increment new list count
-    await db
-      .update(lists)
-      .set({ itemCount: sql`${lists.itemCount} + 1` })
-      .where(eq(lists.id, body.listId));
-  }
-
-  // Handle status change for item count
-  if (body.status === "completed" && currentTodo.status !== "completed") {
-    await db
-      .update(lists)
-      .set({ itemCount: sql`${lists.itemCount} - 1` })
-      .where(eq(lists.id, currentTodo.listId));
-  } else if (body.status === "active" && currentTodo.status === "completed") {
-    await db
-      .update(lists)
-      .set({ itemCount: sql`${lists.itemCount} + 1` })
-      .where(eq(lists.id, currentTodo.listId));
-  }
+  // (list item counts are computed at read time — no maintenance needed)
 
   // Fetch updated todo
   const [updated] = await db.select().from(todos).where(eq(todos.id, id)).limit(1);
@@ -93,14 +68,6 @@ export async function DELETE(
   }
 
   await db.delete(todos).where(eq(todos.id, id));
-
-  // Update list item count if it was active
-  if (todo.status === "active") {
-    await db
-      .update(lists)
-      .set({ itemCount: sql`${lists.itemCount} - 1` })
-      .where(eq(lists.id, todo.listId));
-  }
 
   return NextResponse.json({ success: true });
 }

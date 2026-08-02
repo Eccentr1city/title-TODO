@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
 import { chat } from "@/lib/anthropic";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { loadPrompt } from "@/lib/prompts";
 
@@ -142,12 +142,6 @@ export async function POST(request: NextRequest) {
       };
 
       await db.insert(todos).values(newTodo);
-
-      // Update list item count
-      await db
-        .update(lists)
-        .set({ itemCount: sql`${lists.itemCount} + 1` })
-        .where(eq(lists.id, list.id));
 
       createdTodos.push({
         ...newTodo,

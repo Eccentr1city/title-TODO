@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { anthropic, MODELS } from "@/lib/anthropic";
+import { streamChatResponse } from "@/lib/chat-stream";
 import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
   const listsContext = existingLists.length > 0
     ? existingLists
-        .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || "no description"} [${l.itemCount} items]`)
+        .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || "no description"} [${existingTodos.filter((t) => t.listId === l.id).length} items]`)
         .join("\n")
     : "(No existing lists yet)";
 
@@ -119,40 +119,15 @@ export async function POST(request: NextRequest) {
     ];
   }
 
-  try {
-    const response = await anthropic.messages.create({
-      model: MODELS.medium,
-      max_tokens: 16000,
-      output_config: { effort: "medium" },
-      system: prompt,
-      messages: messagesForApi,
-    });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    const text = textBlock?.type === "text" ? textBlock.text : "";
-
-    if (!text) {
-      console.error("Plan response had no text; stop_reason:", response.stop_reason);
-      return NextResponse.json(
-        { error: `Model returned no text (stop_reason: ${response.stop_reason})` },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json({
-      response: text,
-      usage: {
-        input_tokens: response.usage.input_tokens,
-        output_tokens: response.usage.output_tokens,
-      },
-    });
-  } catch (error) {
-    console.error("Plan conversation error:", error);
-    return NextResponse.json(
-      { error: "Failed to get response" },
-      { status: 500 }
-    );
-  }
+  // Obsidian imports are rare and can be gigantic — streaming means no HTTP
+  // timeout ceiling, so give the model a very large output budget.
+  return streamChatResponse({
+    model: "medium",
+    system: prompt,
+    messages: messagesForApi,
+    maxTokens: 64000,
+    effort: "medium",
+  });
 }
 
 // GET: return the default prompt and notes summary
@@ -169,7 +144,7 @@ export async function GET() {
 
   const listsContext = existingLists.length > 0
     ? existingLists
-        .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || "no description"} [${l.itemCount} items]`)
+        .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || "no description"} [${existingTodos.filter((t) => t.listId === l.id).length} items]`)
         .join("\n")
     : "(No existing lists yet)";
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { todos, lists } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { todos } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 
 export async function GET(request: NextRequest) {
@@ -52,12 +52,6 @@ export async function POST(request: NextRequest) {
   };
 
   await db.insert(todos).values(newTodo);
-
-  // Update list item count
-  await db
-    .update(lists)
-    .set({ itemCount: sql`${lists.itemCount} + 1` })
-    .where(eq(lists.id, body.listId));
 
   return NextResponse.json({
     ...newTodo,

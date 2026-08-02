@@ -4,7 +4,7 @@ import { useState } from "react";
 
 interface AskAboutListProps {
   listName: string;
-  onAsk: (question: string) => Promise<string>;
+  onAsk: (question: string, onUpdate?: (text: string) => void) => Promise<string>;
 }
 
 export function AskAboutList({ listName, onAsk }: AskAboutListProps) {
@@ -19,7 +19,7 @@ export function AskAboutList({ listName, onAsk }: AskAboutListProps) {
     setResponse(null);
     
     try {
-      const answer = await onAsk(question);
+      const answer = await onAsk(question, (partial) => setResponse(partial));
       setResponse(answer);
     } catch (error) {
       setResponse("Sorry, something went wrong. Please try again.");

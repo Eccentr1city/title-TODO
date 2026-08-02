@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { TodoList } from "@/lib/types";
+import { readTextStream } from "@/lib/stream-client";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -29,15 +30,19 @@ export function RefactorLists({ lists, onComplete, onCancel }: RefactorListsProp
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // Send a chat message and get Sonnet's response. Returns the updated messages array.
+  // Send a chat message and stream Sonnet's response into state as it
+  // generates. Returns the updated messages array once complete.
   const sendToSonnet = async (messages: ChatMessage[]): Promise<ChatMessage[]> => {
     const res = await fetch("/api/refactor/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages }),
     });
-    const data = await res.json();
-    return [...messages, { role: "assistant" as const, content: data.response }];
+    setChatMessages([...messages, { role: "assistant", content: "" }]);
+    const text = await readTextStream(res, (t) => {
+      setChatMessages([...messages, { role: "assistant", content: t }]);
+    });
+    return [...messages, { role: "assistant" as const, content: text }];
   };
 
   const sendMessage = async (text?: string) => {

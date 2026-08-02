@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { anthropic, MODELS } from "@/lib/anthropic";
 import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { loadPrompt } from "@/lib/prompts";
 
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const existingTodos = db.select().from(todos).where(eq(todos.status, "active")).all();
 
   const listsContext = existingLists
-    .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || ""} [${l.itemCount} items]`)
+    .map((l) => `- "${l.name}" (${l.isTimeBound ? "time-bound" : "timeless"}): ${l.summary || ""} [${existingTodos.filter((t) => t.listId === l.id).length} items]`)
     .join("\n") || "(none)";
 
   const todosContext = existingTodos
@@ -160,10 +160,6 @@ export async function POST(request: NextRequest) {
       };
 
       db.insert(todos).values(newTodo).run();
-      db.update(lists)
-        .set({ itemCount: sql`${lists.itemCount} + 1` })
-        .where(eq(lists.id, list.id))
-        .run();
 
       createdTodos.push({ list: list.name, title: item.title });
     }

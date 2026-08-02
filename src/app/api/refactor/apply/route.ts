@@ -54,7 +54,7 @@ async function applyAction(action: RefactorAction) {
         tags: newTags || [...new Set(existingLists.flatMap((l) => l.tags || []))],
         isTimeBound: existingLists.some((l) => l.isTimeBound),
         createdAt: new Date(),
-        itemCount: existingLists.reduce((sum, l) => sum + l.itemCount, 0),
+        itemCount: 0, // computed at read time
       };
 
       db.insert(lists).values(mergedList).run();
@@ -98,7 +98,7 @@ async function applyAction(action: RefactorAction) {
         .where(inArray(lists.id, listIds))
         .all();
 
-      const itemCount = listsToDelete.reduce((sum, l) => sum + l.itemCount, 0);
+      const itemCount = db.select().from(todos).where(inArray(todos.listId, listIds)).all().length;
       // Must delete todos first due to FK constraint
       db.delete(todos).where(inArray(todos.listId, listIds)).run();
       db.delete(lists).where(inArray(lists.id, listIds)).run();
@@ -144,10 +144,6 @@ async function applyAction(action: RefactorAction) {
             .set({ listId: newList.id })
             .where(inArray(todos.id, matchingIds))
             .run();
-          db.update(lists)
-            .set({ itemCount: matchingItems.length })
-            .where(eq(lists.id, newList.id))
-            .run();
         }
 
         results.push(`${split.newName} (${matchingItems.length} items)`);
@@ -157,12 +153,6 @@ async function applyAction(action: RefactorAction) {
       const remainingItems = db.select().from(todos).where(eq(todos.listId, listIds[0])).all();
       if (remainingItems.length === 0) {
         db.delete(lists).where(eq(lists.id, listIds[0])).run();
-      } else {
-        // Update the item count for any remaining items
-        db.update(lists)
-          .set({ itemCount: remainingItems.length })
-          .where(eq(lists.id, listIds[0]))
-          .run();
       }
 
       return { action: "split", result: `Split "${sourceList.name}" → ${results.join(", ")}` };
@@ -190,16 +180,6 @@ async function applyAction(action: RefactorAction) {
         db.update(todos)
           .set({ listId: action.targetListId })
           .where(inArray(todos.id, moveIds))
-          .run();
-
-        // Update counts
-        db.update(lists)
-          .set({ itemCount: srcList.itemCount - toMove.length })
-          .where(eq(lists.id, listIds[0]))
-          .run();
-        db.update(lists)
-          .set({ itemCount: dstList.itemCount + toMove.length })
-          .where(eq(lists.id, action.targetListId))
           .run();
       }
 

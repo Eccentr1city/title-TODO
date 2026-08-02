@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { lists } from "@/db/schema";
+import { lists, todos } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 
 export async function GET() {
   const allLists = await db.select().from(lists).all();
-  
+
+  // itemCount is computed, not stored — the denormalized column drifted.
+  const counts = db
+    .select({ listId: todos.listId, count: sql<number>`count(*)` })
+    .from(todos)
+    .where(eq(todos.status, "active"))
+    .groupBy(todos.listId)
+    .all();
+  const countByList = new Map(counts.map((c) => [c.listId, c.count]));
+
   return NextResponse.json(
     allLists.map((list) => ({
       ...list,
       createdAt: list.createdAt.toISOString(),
       tags: list.tags || [],
+      itemCount: countByList.get(list.id) || 0,
     }))
   );
 }

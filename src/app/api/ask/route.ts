@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
-import { chat } from "@/lib/anthropic";
+import { streamChatResponse } from "@/lib/chat-stream";
 import { eq } from "drizzle-orm";
 import { loadPrompt } from "@/lib/prompts";
 
@@ -56,27 +56,15 @@ ${completedTodos.length > 0 ? `\nCompleted items: ${completedTodos.length}` : ""
   });
   const systemPrompt = loadPrompt("ask.txt").replace("{DATETIME}", datetime);
 
-  try {
-    const response = await chat(
-      [
-        { role: "user", content: `${context}\n\nUser question: ${question}` },
-      ],
-      {
-        model: "medium",
-        system: systemPrompt,
-        maxTokens: 4096,
-        effort: "low",
-      }
-    );
-
-    return NextResponse.json({ response });
-  } catch (error) {
-    console.error("Ask error:", error);
-    return NextResponse.json(
-      { error: "Failed to get response" },
-      { status: 500 }
-    );
-  }
+  return streamChatResponse({
+    model: "medium",
+    system: systemPrompt,
+    messages: [
+      { role: "user", content: `${context}\n\nUser question: ${question}` },
+    ],
+    maxTokens: 16000,
+    effort: "low",
+  });
 }
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { readTextStream } from "@/lib/stream-client";
 
 interface TriageNote {
   filename: string;
@@ -77,7 +78,6 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
   const [manualMessages, setManualMessages] = useState<ChatMessage[]>([]);
   const [manualInput, setManualInput] = useState("");
   const [manualSending, setManualSending] = useState(false);
-  const [manualNotFound, setManualNotFound] = useState<string[]>([]);
   const manualEndRef = useRef<HTMLDivElement>(null);
 
   // UI state
@@ -154,16 +154,18 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
           filter: "personal",
         }),
       });
-      const data = await res.json();
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.response || `Error: ${data.error || "empty response from model"}` },
-      ]);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      await readTextStream(res, (text) => {
+        setChatMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "assistant", content: text },
+        ]);
+      });
     } catch (err) {
       console.error("Planning failed:", err);
       setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Error: failed to get response. Please try again." },
+        ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
+        { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
       ]);
     } finally {
       setIsSending(false);
@@ -189,16 +191,18 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
           filter: "personal",
         }),
       });
-      const data = await res.json();
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.response || `Error: ${data.error || "empty response from model"}` },
-      ]);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      await readTextStream(res, (text) => {
+        setChatMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "assistant", content: text },
+        ]);
+      });
     } catch (err) {
       console.error("Chat failed:", err);
       setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Error: failed to get response." },
+        ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
+        { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
       ]);
     } finally {
       setIsSending(false);
@@ -241,7 +245,6 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
 
     setStage("manual-planning");
     setManualMessages([]);
-    setManualNotFound([]);
 
     const initialMessage = "Please review these notes and propose TODOs. Ask me about anything you're unsure about.";
     setManualMessages([{ role: "user", content: initialMessage }]);
@@ -255,18 +258,19 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
         messages: [{ role: "user", content: initialMessage }],
       }),
     })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.notFound?.length) setManualNotFound(data.notFound);
-        setManualMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.response },
-        ]);
+      .then(async (res) => {
+        setManualMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+        await readTextStream(res, (text) => {
+          setManualMessages((prev) => [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: text },
+          ]);
+        });
       })
-      .catch(() => {
+      .catch((err) => {
         setManualMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "Error: failed to get response." },
+          ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
+          { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
         ]);
       })
       .finally(() => setManualSending(false));
@@ -289,15 +293,17 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filePaths: paths, messages: updatedMessages }),
       });
-      const data = await res.json();
+      setManualMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      await readTextStream(res, (text) => {
+        setManualMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "assistant", content: text },
+        ]);
+      });
+    } catch (err) {
       setManualMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.response },
-      ]);
-    } catch {
-      setManualMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Error: failed to get response." },
+        ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
+        { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
       ]);
     } finally {
       setManualSending(false);
@@ -495,13 +501,6 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
         {/* ===== MANUAL PLANNING CONVERSATION ===== */}
         {stage === "manual-planning" && (
           <>
-            {manualNotFound.length > 0 && (
-              <div className="bg-error/10 border border-error/30 p-3 text-sm">
-                <span className="text-error font-medium">Not found:</span>{" "}
-                <span className="text-text-muted">{manualNotFound.join(", ")}</span>
-              </div>
-            )}
-
             <div className="space-y-4">
               {manualMessages.map((msg, i) => (
                 <div

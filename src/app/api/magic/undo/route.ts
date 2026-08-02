@@ -18,21 +18,18 @@ export async function POST(request: NextRequest) {
 
     await db.delete(todos).where(eq(todos.id, id));
     deletedTodoIds.push(id);
-
-    if (todo.status === "active") {
-      await db
-        .update(lists)
-        .set({ itemCount: sql`MAX(${lists.itemCount} - 1, 0)` })
-        .where(eq(lists.id, todo.listId));
-    }
   }
 
   // Delete newly created lists that are now empty
   const deletedListIds: string[] = [];
   if (Array.isArray(listIds) && listIds.length > 0) {
     for (const listId of listIds) {
-      const [list] = await db.select().from(lists).where(eq(lists.id, listId)).limit(1);
-      if (list && list.itemCount <= 0) {
+      const remaining = db
+        .select({ count: sql<number>`count(*)` })
+        .from(todos)
+        .where(eq(todos.listId, listId))
+        .get();
+      if (remaining && remaining.count === 0) {
         await db.delete(lists).where(eq(lists.id, listId));
         deletedListIds.push(listId);
       }
