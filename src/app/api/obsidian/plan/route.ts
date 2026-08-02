@@ -122,13 +122,22 @@ export async function POST(request: NextRequest) {
   try {
     const response = await anthropic.messages.create({
       model: MODELS.medium,
-      max_tokens: 8192,
+      max_tokens: 16000,
+      output_config: { effort: "medium" },
       system: prompt,
       messages: messagesForApi,
     });
 
     const textBlock = response.content.find((b) => b.type === "text");
     const text = textBlock?.type === "text" ? textBlock.text : "";
+
+    if (!text) {
+      console.error("Plan response had no text; stop_reason:", response.stop_reason);
+      return NextResponse.json(
+        { error: `Model returned no text (stop_reason: ${response.stop_reason})` },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({
       response: text,

@@ -157,7 +157,7 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
       const data = await res.json();
       setChatMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.response },
+        { role: "assistant", content: data.response || `Error: ${data.error || "empty response from model"}` },
       ]);
     } catch (err) {
       console.error("Planning failed:", err);
@@ -192,7 +192,7 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
       const data = await res.json();
       setChatMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.response },
+        { role: "assistant", content: data.response || `Error: ${data.error || "empty response from model"}` },
       ]);
     } catch (err) {
       console.error("Chat failed:", err);

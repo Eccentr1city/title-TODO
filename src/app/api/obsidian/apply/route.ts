@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
   const categoryResponse = await anthropic.messages.create({
     model: MODELS.medium,
     max_tokens: 4096,
+    output_config: { effort: "low" },
     system: loadPrompt("obsidian-apply-categories.txt"),
     messages: [{ role: "user", content: plan }],
   });
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
       try {
         const response = await anthropic.messages.create({
           model: MODELS.medium,
-          max_tokens: 8192,
+          max_tokens: 16000,
+          output_config: { effort: "medium" },
           system: prompt,
           messages: [
             {

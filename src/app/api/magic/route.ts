@@ -56,9 +56,10 @@ export async function POST(request: NextRequest) {
     const response = await chat(
       [{ role: "user", content: input + contextMessage }],
       { 
-        model: selectedModel as "cheap" | "medium" | "expensive", 
+        model: selectedModel as "cheap" | "medium" | "expensive",
         system: systemPrompt,
         maxTokens: 8192,
+        effort: "medium",
       }
     );
 

@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       {
         model: "expensive",
         system: loadPrompt("refactor.txt"),
-        maxTokens: 8192,
+        maxTokens: 16000,
       }
     );
 
