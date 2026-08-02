@@ -571,7 +571,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-dvh flex flex-col">
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Mobile overlay */}
@@ -684,7 +684,7 @@ export default function Home() {
                     />
                     {/* Desktop: dropdown. Mobile: bottom sheet */}
                     <div className="
-                      fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto
+                      fixed inset-x-0 bottom-0 z-50 max-h-[70dvh] overflow-y-auto
                       bg-background-secondary border-t border-border
                       md:absolute md:inset-auto md:right-0 md:top-full md:mt-1
                       md:w-72 md:border md:max-h-80 md:shadow-lg md:bottom-auto
@@ -863,7 +863,7 @@ export default function Home() {
       )}
 
       {/* Magic Input - Bottom */}
-      <footer className="flex-shrink-0 border-t border-border">
+      <footer className="flex-shrink-0 border-t border-border pb-[env(safe-area-inset-bottom)]">
         <MagicInput
           onSubmit={handleMagicInput}
           isProcessing={isProcessing}
