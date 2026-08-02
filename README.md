@@ -62,7 +62,9 @@ src/db/           Drizzle schema + SQLite connection
 src/lib/          Anthropic client, prompt loading, priority logic, types
 src/prompts/      Prompt templates (.txt) for each LLM feature
 scripts/          obsidian-triage.ts
-data/todos.db     SQLite database (gitignored state lives here)
+data/todos.db     SQLite fallback location (see below)
 ```
 
-Database migrations use Drizzle Kit: `npm run db:generate` / `npm run db:push`.
+**Where the data actually lives:** the SQLite database is stored in iCloud for automatic backup — `~/Library/Mobile Documents/com~apple~CloudDocs/title-TODO/todos.db`. The repo's `data/todos.db` is only a fallback used when the iCloud directory doesn't exist (see `src/db/index.ts`).
+
+Schema changes: new tables/columns are created idempotently at startup in `src/db/index.ts`. Avoid `npm run db:push` (drizzle-kit) against the live database — it has proposed destructive rebuilds.

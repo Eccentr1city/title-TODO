@@ -572,6 +572,7 @@ export default function Home() {
             inboxCount={inboxCount}
             completedCount={completedCount}
             highlightedListIds={highlightedListIds}
+            onRefresh={fetchData}
           />
         </div>
 

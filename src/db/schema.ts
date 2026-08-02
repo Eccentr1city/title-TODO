@@ -37,6 +37,12 @@ export const todos = sqliteTable("todos", {
   manualPriority: real("manual_priority").notNull().default(0),
 });
 
+// Simple key-value store for app-level settings (e.g. sidebar category order)
+export const meta = sqliteTable("meta", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
 // Types
 export type List = typeof lists.$inferSelect;
 export type NewList = typeof lists.$inferInsert;

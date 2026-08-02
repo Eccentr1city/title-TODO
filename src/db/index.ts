@@ -56,6 +56,11 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_todos_list_id ON todos(list_id);
   CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
   CREATE INDEX IF NOT EXISTS idx_todos_next_reminder ON todos(next_reminder);
+
+  CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
 
 // Migrations for existing databases
