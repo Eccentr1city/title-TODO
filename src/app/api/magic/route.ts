@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       { 
         model: selectedModel as "cheap" | "medium" | "expensive", 
         system: systemPrompt,
-        maxTokens: 4096,
+        maxTokens: 8192,
       }
     );
 

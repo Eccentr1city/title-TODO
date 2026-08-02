@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     const response = await anthropic.messages.create({
       model: MODELS.medium,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: prompt,
       messages,
     });

@@ -64,7 +64,7 @@ ${completedTodos.length > 0 ? `\nCompleted items: ${completedTodos.length}` : ""
       {
         model: "medium",
         system: systemPrompt,
-        maxTokens: 1024,
+        maxTokens: 4096,
       }
     );
 

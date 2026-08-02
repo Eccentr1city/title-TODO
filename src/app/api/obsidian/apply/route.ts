@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   // Extract categories from the plan by asking Sonnet to list them
   const categoryResponse = await anthropic.messages.create({
     model: MODELS.medium,
-    max_tokens: 2048,
+    max_tokens: 4096,
     system: loadPrompt("obsidian-apply-categories.txt"),
     messages: [{ role: "user", content: plan }],
   });
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       try {
         const response = await anthropic.messages.create({
           model: MODELS.medium,
-          max_tokens: 4096,
+          max_tokens: 8192,
           system: prompt,
           messages: [
             {
