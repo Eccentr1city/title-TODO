@@ -227,11 +227,16 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
           conversationHistory: chatMessages,
         }),
       });
+      if (!res.ok) throw new Error(`Apply failed (HTTP ${res.status})`);
       const data = await res.json();
       setApplyResults(data);
       setStage("done");
     } catch (err) {
       console.error("Apply failed:", err);
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error applying the plan: ${err instanceof Error ? err.message : String(err)}. Nothing may have been saved — check and try again.` },
+      ]);
       setStage("planning");
     }
   };
@@ -327,10 +332,15 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
           conversationHistory: manualMessages,
         }),
       });
+      if (!res.ok) throw new Error(`Apply failed (HTTP ${res.status})`);
       const data = await res.json();
       setApplyResults(data);
       setStage("manual-done");
-    } catch {
+    } catch (err) {
+      setManualMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error applying the plan: ${err instanceof Error ? err.message : String(err)}. Nothing may have been saved — check and try again.` },
+      ]);
       setStage("manual-planning");
     }
   };

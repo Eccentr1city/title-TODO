@@ -87,14 +87,31 @@ export async function POST(request: NextRequest) {
   const createdLists: string[] = [];
   const errors: string[] = [];
 
+  // The model is asked for a single {listName, todos} object per category, but
+  // sometimes returns an array or a {lists: [...]} wrapper — accept all three.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const listEntries: { category: string; data: any }[] = [];
   for (const result of results) {
     if (result.error || !result.data) {
       errors.push(`${result.category}: ${result.error || "no data"}`);
       continue;
     }
+    const entries = Array.isArray(result.data)
+      ? result.data
+      : Array.isArray(result.data.lists)
+        ? result.data.lists
+        : [result.data];
+    for (const entry of entries) {
+      if (!entry || typeof entry.listName !== "string" || !entry.listName.trim()) {
+        errors.push(`${result.category}: entry missing listName — skipped`);
+        continue;
+      }
+      listEntries.push({ category: result.category, data: entry });
+    }
+  }
 
-    const data = result.data;
-
+  for (const { category, data } of listEntries) {
+    try {
     // Find or create list
     let list = existingLists.find(
       (l) => l.name.toLowerCase() === data.listName.toLowerCase()
@@ -135,6 +152,7 @@ export async function POST(request: NextRequest) {
 
     // Create todos
     for (const item of data.todos || []) {
+      if (!item || typeof item.title !== "string" || !item.title.trim()) continue;
       // Check for duplicate titles in same list
       const isDuplicate = existingTodos.some(
         (t) =>
@@ -162,6 +180,10 @@ export async function POST(request: NextRequest) {
       db.insert(todos).values(newTodo).run();
 
       createdTodos.push({ list: list.name, title: item.title });
+    }
+    } catch (err) {
+      // One malformed entry shouldn't 500 the whole apply
+      errors.push(`${category} / "${data.listName}": ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
