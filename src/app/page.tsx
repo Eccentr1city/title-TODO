@@ -560,6 +560,90 @@ export default function Home() {
   };
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showCopyMenu, setShowCopyMenu] = useState(false);
+  const [justCopied, setJustCopied] = useState(false);
+
+  // navigator.clipboard needs a secure context; over plain http on the
+  // Tailscale hostname fall back to the legacy textarea trick.
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const listNameFor = (todo: TodoItem) => lists.find((l) => l.id === todo.listId)?.name;
+
+  const buildViewMarkdown = () => {
+    const today = new Date().toISOString().split("T")[0];
+    const plural = displayedTodos.length === 1 ? "item" : "items";
+    const lines: string[] = [`# ${getViewTitle()} — ${displayedTodos.length} ${plural} (${today})`];
+    if (selectedList?.summary) lines.push(`> ${selectedList.summary}`);
+
+    const fmt = (t: TodoItem) => {
+      const meta: string[] = [];
+      if (!selectedList) {
+        const name = listNameFor(t);
+        if (name) meta.push(`list: ${name}`);
+      }
+      if (t.tags && t.tags.length > 0) meta.push(`tags: ${t.tags.join(", ")}`);
+      if (t.effort) meta.push(`effort: ${t.effort}`);
+      if (t.nextReminder) meta.push(`reminder: ${t.nextReminder.split("T")[0]}`);
+      let line = `- [${t.status === "completed" ? "x" : " "}] ${t.title}${meta.length > 0 ? ` _(${meta.join("; ")})_` : ""}`;
+      if (t.content) line += `\n  - ${t.content.replace(/\n/g, "\n    ")}`;
+      return line;
+    };
+
+    if (dueNowTodos.length > 0) {
+      lines.push("", "## Due now", ...dueNowTodos.map(fmt));
+      lines.push("", "## Everything else", ...regularTodos.map(fmt));
+    } else {
+      lines.push("", ...displayedTodos.map(fmt));
+    }
+    return lines.join("\n");
+  };
+
+  const buildViewJson = () =>
+    JSON.stringify(
+      {
+        view: getViewTitle(),
+        exportedAt: new Date().toISOString(),
+        items: displayedTodos.map((t) => ({
+          title: t.title,
+          content: t.content || null,
+          list: listNameFor(t) || null,
+          status: t.status,
+          tags: t.tags || [],
+          effort: t.effort || null,
+          nextReminder: t.nextReminder || null,
+          createdAt: t.createdAt,
+        })),
+      },
+      null,
+      2
+    );
+
+  const handleCopyView = async (format: "markdown" | "json") => {
+    setShowCopyMenu(false);
+    const ok = await copyToClipboard(format === "markdown" ? buildViewMarkdown() : buildViewJson());
+    if (ok) {
+      setJustCopied(true);
+      setTimeout(() => setJustCopied(false), 1500);
+    }
+  };
 
   const handleSelectView = (view: string | null) => {
     setSelectedView(view);
@@ -661,6 +745,38 @@ export default function Home() {
                   </kbd>
                 </button>
               </>
+            )}
+            {!searchOpen && !isObsidianView && !isRefactorView && displayedTodos.length > 0 && (
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => setShowCopyMenu(!showCopyMenu)}
+                  className={`text-sm px-2 py-1.5 transition-colors ${
+                    justCopied ? "text-accent" : "text-text-muted hover:text-text-normal"
+                  }`}
+                  title="Copy visible items"
+                >
+                  {justCopied ? "copied!" : "copy"}
+                </button>
+                {showCopyMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowCopyMenu(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-background-secondary border border-border shadow-lg min-w-[180px]">
+                      <button
+                        onClick={() => handleCopyView("markdown")}
+                        className="w-full text-left px-3 py-2 text-sm text-text-normal hover:bg-background-tertiary"
+                      >
+                        Copy as Markdown
+                      </button>
+                      <button
+                        onClick={() => handleCopyView("json")}
+                        className="w-full text-left px-3 py-2 text-sm text-text-normal hover:bg-background-tertiary"
+                      >
+                        Copy as JSON
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
             {!searchOpen && selectedView === null && (
               <div className="relative flex-shrink-0">
