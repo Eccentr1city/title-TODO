@@ -28,10 +28,22 @@ html, body {
   overscroll-behavior: none;
 }
 
-/* Full-height app shell; --app-height tracks the visual viewport (see page.tsx) */
+/* Full-screen app shell. Pinned to the viewport edges rather than sized with
+   dvh, which iOS home-screen apps get wrong. --keyboard-inset lifts the bottom
+   edge while the on-screen keyboard is open (see page.tsx). */
 .app-shell {
-  height: 100dvh;
-  height: var(--app-height, 100dvh);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--keyboard-inset, 0px);
+  background: var(--bg-primary);
+}
+
+/* If the shell ever falls short of the screen edge in the installed app, show
+   the input bar's colour there rather than a dark band. */
+@media (display-mode: standalone) {
+  body { background: var(--bg-secondary); }
 }
 
 body {

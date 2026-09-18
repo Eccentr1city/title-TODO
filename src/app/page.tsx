@@ -560,15 +560,18 @@ export default function Home() {
   };
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // In the iOS home-screen app the on-screen keyboard does not shrink 100dvh;
-  // iOS instead scrolls the whole document to reveal the focused input and can
-  // leave it scrolled, so the layout ends up shifted with a gap at the bottom.
-  // Size the shell to the visual viewport and keep the document at the top.
+  // In the iOS home-screen app the on-screen keyboard does not shrink the
+  // layout viewport; iOS instead scrolls the whole document to reveal the
+  // focused input and can leave it scrolled. The shell is pinned to the screen
+  // (see .app-shell); here we lift its bottom edge by the keyboard height and
+  // keep the document at the top.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const update = () => {
-      document.documentElement.style.setProperty("--app-height", `${Math.round(vv.height)}px`);
+      // Height hidden by the keyboard = layout viewport minus visual viewport.
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      document.documentElement.style.setProperty("--keyboard-inset", `${inset}px`);
       if (window.scrollY !== 0) window.scrollTo(0, 0);
     };
     update();
