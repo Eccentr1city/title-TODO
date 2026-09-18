@@ -13,9 +13,10 @@ Magic TODO lists powered by LLMs. A Next.js app with a SQLite backend (Drizzle O
 The app runs as an always-on service on the MacBook and is reachable from any device on the Tailscale network:
 
 - **Mac:** http://localhost:3000
-- **Any Tailscale device:** http://adams-macbook-pro-3:3000 (or http://100.72.197.109:3000)
+- **Any Tailscale device:** https://adams-macbook-pro-3.tail18d97e.ts.net/ (served over HTTPS by `tailscale serve`, tailnet only)
+- Plain HTTP also still works at http://adams-macbook-pro-3:3000 or http://100.72.197.109:3000
 
-On the phone, type the `http://` prefix explicitly or Chrome treats the hostname as a search query.
+The HTTPS address is what to use on the phone: it has a real certificate, so Chrome and Safari offer "Add to Home Screen" and the app launches full-screen with its own icon. The proxy was set up once with `tailscale serve --bg --https=443 http://127.0.0.1:3000` and persists across reboots; `tailscale serve status` shows it.
 
 ## Always-on service (launchd)
 
