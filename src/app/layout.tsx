@@ -8,6 +8,7 @@ export const metadata: Metadata = {
     "viewport": "width=device-width, initial-scale=1, viewport-fit=cover",
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
+    "apple-mobile-web-app-title": "TODO",
   },
 };
 
