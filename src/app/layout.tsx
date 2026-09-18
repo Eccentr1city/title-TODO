@@ -9,6 +9,10 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "TODO",
   },
+  other: {
+    // Next emits the generic tag; older iOS only honours the Apple-prefixed one.
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
