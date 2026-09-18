@@ -560,6 +560,26 @@ export default function Home() {
   };
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // In the iOS home-screen app the on-screen keyboard does not shrink 100dvh;
+  // iOS instead scrolls the whole document to reveal the focused input and can
+  // leave it scrolled, so the layout ends up shifted with a gap at the bottom.
+  // Size the shell to the visual viewport and keep the document at the top.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      document.documentElement.style.setProperty("--app-height", `${Math.round(vv.height)}px`);
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
+
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
 
@@ -655,7 +675,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-dvh flex flex-col">
+    <div className="app-shell flex flex-col pt-[env(safe-area-inset-top)]">
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Mobile overlay */}
@@ -669,6 +689,7 @@ export default function Home() {
         {/* Sidebar */}
         <div className={`
           fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 ease-in-out
+          pt-[env(safe-area-inset-top)] bg-background-secondary md:pt-0
           md:relative md:translate-x-0 md:z-auto
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         `}>

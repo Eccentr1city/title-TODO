@@ -24,6 +24,16 @@
   border-radius: 0 !important;
 }
 
+html, body {
+  overscroll-behavior: none;
+}
+
+/* Full-height app shell; --app-height tracks the visual viewport (see page.tsx) */
+.app-shell {
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+}
+
 body {
   background: var(--bg-primary);
   color: var(--text-normal);
