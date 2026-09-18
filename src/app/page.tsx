@@ -1000,7 +1000,7 @@ export default function Home() {
       )}
 
       {/* Magic Input - Bottom */}
-      <footer className="flex-shrink-0 border-t border-border pb-[env(safe-area-inset-bottom)]">
+      <footer className="flex-shrink-0 border-t border-border">
         <MagicInput
           onSubmit={handleMagicInput}
           isProcessing={isProcessing}
