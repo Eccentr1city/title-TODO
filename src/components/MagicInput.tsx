@@ -115,7 +115,7 @@ export function MagicInput({ onSubmit, isProcessing, canUndo, onUndo }: MagicInp
     : MODEL_LABELS[effectiveModel];
 
   return (
-    <div className="relative bg-background-secondary pb-[max(0rem,env(safe-area-inset-bottom))]">
+    <div className="relative bg-background-secondary pb-[max(0px,calc(env(safe-area-inset-bottom)-1.25rem))]">
       {/* Progress bar */}
       {isProcessing && (
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-background-tertiary overflow-hidden z-10">
@@ -249,7 +249,7 @@ export function MagicInput({ onSubmit, isProcessing, canUndo, onUndo }: MagicInp
 
         {/* Hint for long inputs */}
         {value.length > 200 && !isProcessing && (
-          <div className="text-center text-[10px] text-text-faint mt-1">
+          <div className="hidden sm:block text-center text-[10px] text-text-faint mt-1">
             Shift+Enter for new line
           </div>
         )}
