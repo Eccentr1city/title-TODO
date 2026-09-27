@@ -3,7 +3,7 @@ import { anthropic } from "@/lib/anthropic";
 import fs from "fs";
 import path from "path";
 import { loadPrompt } from "@/lib/prompts";
-import { DATA_DIR, NOTES_DIR, obsidianUnavailable } from "@/lib/paths";
+import { DATA_DIR, NOTES_DIR, notesAvailable, obsidianUnavailable } from "@/lib/paths";
 
 const STATE_FILE = path.join(DATA_DIR, "obsidian-sync-state.json");
 const RAW_OUTPUTS_FILE = path.join(DATA_DIR, "obsidian-triage-raw-outputs.json");
@@ -57,11 +57,12 @@ function sleep(ms: number) {
 
 // GET: return current state (prompt, results, stats)
 export async function GET() {
-  const unavailable = obsidianUnavailable();
-  if (unavailable) return unavailable;
+  // Always answer with the normal shape: the page reads it on load. Without the
+  // vault (e.g. on perihelion) past results still show, with no new notes.
+  const vaultAvailable = notesAvailable();
   const state = loadState();
 
-  const allNotes = getAllNotes();
+  const allNotes = vaultAvailable ? getAllNotes() : [];
   const newOrModified = allNotes.filter((note) => {
     const prev = state.processedFiles[note.relPath];
     return !prev || note.mtimeMs > prev.mtimeMs;
@@ -83,6 +84,7 @@ export async function GET() {
     newOrModifiedCount: newOrModified.length,
     personalNotes: personal,
     workNotes: work,
+    vaultAvailable,
   });
 }
 

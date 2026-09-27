@@ -118,6 +118,11 @@ export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
         body: JSON.stringify({ prompt: triagePrompt, force: forceReprocess }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        window.alert(data.error ?? "Triage failed.");
+        setStage("overview");
+        return;
+      }
       setTriageResults(data);
       setStage("triage-results");
       await fetchStatus();

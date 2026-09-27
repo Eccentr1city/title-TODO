@@ -20,8 +20,12 @@ if (!fs.existsSync(DATA_DIR)) {
 export const NOTES_DIR =
   process.env.OBSIDIAN_NOTES_DIR || "/Users/adamkaufman/Documents/Adam's Notes";
 
+export function notesAvailable(): boolean {
+  return fs.existsSync(NOTES_DIR);
+}
+
 export function obsidianUnavailable(): NextResponse | null {
-  if (fs.existsSync(NOTES_DIR)) return null;
+  if (notesAvailable()) return null;
   return NextResponse.json(
     { error: "Obsidian import isn't available here: the notes vault only exists on the Mac." },
     { status: 503 }
