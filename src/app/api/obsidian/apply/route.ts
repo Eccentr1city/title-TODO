@@ -5,6 +5,7 @@ import { lists, todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { loadPrompt } from "@/lib/prompts";
+import { localDateISO } from "@/lib/dates";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
     conversationHistory: { role: "user" | "assistant"; content: string }[];
   };
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateISO();
   const existingLists = db.select().from(lists).all();
   const existingTodos = db.select().from(todos).where(eq(todos.status, "active")).all();
 

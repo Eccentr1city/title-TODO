@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import { loadPrompt } from "@/lib/prompts";
+import { localDateISO } from "@/lib/dates";
 import { DATA_DIR, NOTES_DIR, obsidianUnavailable } from "@/lib/paths";
 
 const STATE_FILE = path.join(DATA_DIR, "obsidian-sync-state.json");
@@ -52,7 +53,7 @@ function buildNotesContext(filter: "personal" | "work" | "both"): string {
 
     const content = fs.readFileSync(fullPath, "utf-8");
     const mtime = new Date(meta.mtimeMs);
-    const mtimeStr = mtime.toISOString().split("T")[0];
+    const mtimeStr = localDateISO(mtime);
 
     noteContents.push(
       `=== ${relPath} (last modified: ${mtimeStr}) ===\n${content}\n`
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
         .join("\n")
     : "(No existing TODOs)";
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateISO();
 
   const prompt = (systemPrompt || DEFAULT_PLAN_PROMPT)
     .replace("{TODAY}", today)
@@ -138,7 +139,7 @@ export async function GET() {
 
   const { existingLists, existingTodos } = getExistingContext();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateISO();
 
   const listsContext = existingLists.length > 0
     ? existingLists

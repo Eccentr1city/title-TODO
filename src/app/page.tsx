@@ -11,6 +11,7 @@ import { ObsidianSync } from "@/components/ObsidianSync";
 import { TodoItem, TodoList } from "@/lib/types";
 import { effectivePriority, computeVotePriority, priorityHeatClass } from "@/lib/priority";
 import { readTextStream } from "@/lib/stream-client";
+import { localDateISO } from "@/lib/dates";
 
 // Special view IDs
 const VIEW_INBOX = null;
@@ -631,7 +632,7 @@ export default function Home() {
   const listNameFor = (todo: TodoItem) => lists.find((l) => l.id === todo.listId)?.name;
 
   const buildViewMarkdown = () => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = localDateISO();
     const plural = displayedTodos.length === 1 ? "item" : "items";
     const lines: string[] = [`# ${getViewTitle()} — ${displayedTodos.length} ${plural} (${today})`];
     if (selectedList?.summary) lines.push(`> ${selectedList.summary}`);

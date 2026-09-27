@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { loadPrompt } from "@/lib/prompts";
+import { localDateISO } from "@/lib/dates";
 
 function getListsContext() {
   const allLists = db.select().from(lists).all();
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     messages: { role: "user" | "assistant"; content: string }[];
   };
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateISO();
   const listsContext = getListsContext();
 
   const prompt = loadPrompt("refactor-chat.txt")

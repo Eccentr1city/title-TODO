@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import { loadPrompt } from "@/lib/prompts";
+import { localDateISO } from "@/lib/dates";
 import { NOTES_DIR, obsidianUnavailable } from "@/lib/paths";
 
 
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
     const content = fs.readFileSync(fullPath, "utf-8");
     const stat = fs.statSync(fullPath);
-    const mtime = stat.mtime.toISOString().split("T")[0];
+    const mtime = localDateISO(stat.mtime);
     noteContents.push(`=== ${relPath} (last modified: ${mtime}) ===\n${content}\n`);
   }
 
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     })
     .join("\n") || "(none)";
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateISO();
 
   const systemPrompt = loadPrompt("obsidian-manual.txt")
     .replace("{TODAY}", today)
