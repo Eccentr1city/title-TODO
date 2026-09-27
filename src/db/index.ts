@@ -2,22 +2,9 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import path from "path";
-import fs from "fs";
+import { DATA_DIR } from "@/lib/paths";
 
-// Store data in iCloud for automatic backup
-const icloudDir = path.join(
-  process.env.HOME || "",
-  "Library/Mobile Documents/com~apple~CloudDocs/title-TODO"
-);
-// Fallback to local data/ directory if iCloud isn't available
-const dataDir = fs.existsSync(icloudDir)
-  ? icloudDir
-  : path.join(process.cwd(), "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const dbPath = path.join(dataDir, "todos.db");
+const dbPath = path.join(DATA_DIR, "todos.db");
 const sqlite = new Database(dbPath);
 
 // Enable WAL mode for better concurrency

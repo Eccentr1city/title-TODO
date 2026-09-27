@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { DATA_DIR } from "@/lib/paths";
 
-const ICLOUD_DIR = path.join(
-  process.env.HOME || "",
-  "Library/Mobile Documents/com~apple~CloudDocs/title-TODO"
-);
-const FILTER_FILE = path.join(ICLOUD_DIR, "inbox-filter.json");
+const FILTER_FILE = path.join(DATA_DIR, "inbox-filter.json");
 
 // Each mode keeps its own selection so switching between "Hide selected" and
 // "Show only selected" doesn't clobber the other's list.
@@ -41,8 +38,8 @@ function loadFilter(): InboxFilter {
 }
 
 function saveFilter(filter: InboxFilter) {
-  if (!fs.existsSync(ICLOUD_DIR)) {
-    fs.mkdirSync(ICLOUD_DIR, { recursive: true });
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   fs.writeFileSync(FILTER_FILE, JSON.stringify(filter, null, 2));
 }

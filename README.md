@@ -8,35 +8,18 @@ Magic TODO lists powered by LLMs. A Next.js app with a SQLite backend (Drizzle O
 - **Obsidian sync** — triage items from an Obsidian vault into lists
 - Manual priority sorting, inline editing, auto-refresh
 
-## Access
+## Access and hosting
 
-The app runs as an always-on service on the MacBook and is reachable from any device on the Tailscale network:
+Runs on the home server `perihelion` in Docker as a production build (`next build` + `next start`):
+**https://perihelion.tail18d97e.ts.net/** (tailnet only, published with `tailscale serve --https=443 http://127.0.0.1:3000`).
 
-- **Mac:** http://localhost:3000
-- **Any Tailscale device:** https://adams-macbook-pro-3.tail18d97e.ts.net/ (served over HTTPS by `tailscale serve`, tailnet only)
-- Plain HTTP also still works at http://adams-macbook-pro-3:3000 or http://100.72.197.109:3000
+- Data (`todos.db` + the JSON state files) lives in `/srv/data/title-todo`, snapshotted hourly; a pre-backup hook takes a consistent SQLite copy.
+- `ANTHROPIC_API_KEY` is in `/srv/secrets/title-todo.env` on perihelion (source of truth: 1Password).
+- Obsidian import only works where the vault exists (`OBSIDIAN_NOTES_DIR`, default `~/Documents/Adam's Notes` on the Mac); on perihelion those routes return 503.
+- Deploy: `rsync -a --delete --exclude-from=.dockerignore ./ perihelion:/srv/apps/title-todo/ && ssh perihelion 'cd /srv/apps/title-todo && docker compose up -d --build'`
+- Logs: `ssh perihelion 'docker logs title-todo-title-todo-1'`
 
-The HTTPS address is what to use on the phone: it has a real certificate, so Chrome and Safari offer "Add to Home Screen" and the app launches full-screen with its own icon. The proxy was set up once with `tailscale serve --bg --https=443 http://127.0.0.1:3000` and persists across reboots; `tailscale serve status` shows it.
-
-## Always-on service (launchd)
-
-A LaunchAgent at `~/Library/LaunchAgents/com.adamkaufman.title-todo.plist` starts the app at login and restarts it if it crashes — same setup as `skrypt2` and `names-and-faces`. Logs go to `~/Library/Logs/title-todo.log`.
-
-Useful commands:
-
-```bash
-# restart the service (e.g. after pulling changes)
-launchctl kickstart -k gui/$(id -u)/com.adamkaufman.title-todo
-
-# stop / start
-launchctl bootout gui/$(id -u)/com.adamkaufman.title-todo
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.adamkaufman.title-todo.plist
-
-# tail logs
-tail -f ~/Library/Logs/title-todo.log
-```
-
-The service runs `npm start`, which is the Next.js dev server bound to `0.0.0.0:3000` — so code changes hot-reload without a rebuild.
+The old Mac LaunchAgent (`com.adamkaufman.title-todo`) is disabled.
 
 ## Development
 
@@ -66,6 +49,6 @@ scripts/          obsidian-triage.ts
 data/todos.db     SQLite fallback location (see below)
 ```
 
-**Where the data actually lives:** the SQLite database is stored in iCloud for automatic backup — `~/Library/Mobile Documents/com~apple~CloudDocs/title-TODO/todos.db`. The repo's `data/todos.db` is only a fallback used when the iCloud directory doesn't exist (see `src/db/index.ts`).
+**Where the data lives:** `$TITLE_TODO_DATA_DIR` if set (perihelion: `/srv/data/title-todo`), else the iCloud folder `~/Library/Mobile Documents/com~apple~CloudDocs/title-TODO/` (the old Mac location, now a stale copy), else `data/` in the repo (see `src/lib/paths.ts`).
 
 Schema changes: new tables/columns are created idempotently at startup in `src/db/index.ts`. Avoid `npm run db:push` (drizzle-kit) against the live database — it has proposed destructive rebuilds.

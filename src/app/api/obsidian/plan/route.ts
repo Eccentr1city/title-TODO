@@ -6,13 +6,9 @@ import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import { loadPrompt } from "@/lib/prompts";
+import { DATA_DIR, NOTES_DIR, obsidianUnavailable } from "@/lib/paths";
 
-const NOTES_DIR = "/Users/adamkaufman/Documents/Adam's Notes";
-const ICLOUD_DIR = path.join(
-  process.env.HOME || "",
-  "Library/Mobile Documents/com~apple~CloudDocs/title-TODO"
-);
-const STATE_FILE = path.join(ICLOUD_DIR, "obsidian-sync-state.json");
+const STATE_FILE = path.join(DATA_DIR, "obsidian-sync-state.json");
 
 function loadTriageState() {
   if (fs.existsSync(STATE_FILE)) {
@@ -70,6 +66,8 @@ const DEFAULT_PLAN_PROMPT = loadPrompt("obsidian-plan.txt");
 
 // POST: send a message in the planning conversation
 export async function POST(request: NextRequest) {
+  const unavailable = obsidianUnavailable();
+  if (unavailable) return unavailable;
   const body = await request.json();
   const {
     messages,

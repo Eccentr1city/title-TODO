@@ -6,10 +6,12 @@ import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import { loadPrompt } from "@/lib/prompts";
+import { NOTES_DIR, obsidianUnavailable } from "@/lib/paths";
 
-const NOTES_DIR = "/Users/adamkaufman/Documents/Adam's Notes";
 
 export async function POST(request: NextRequest) {
+  const unavailable = obsidianUnavailable();
+  if (unavailable) return unavailable;
   const body = await request.json();
   const { filePaths, messages } = body as {
     filePaths: string[];

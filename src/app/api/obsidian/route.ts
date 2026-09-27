@@ -3,14 +3,10 @@ import { anthropic } from "@/lib/anthropic";
 import fs from "fs";
 import path from "path";
 import { loadPrompt } from "@/lib/prompts";
+import { DATA_DIR, NOTES_DIR, obsidianUnavailable } from "@/lib/paths";
 
-const NOTES_DIR = "/Users/adamkaufman/Documents/Adam's Notes";
-const ICLOUD_DIR = path.join(
-  process.env.HOME || "",
-  "Library/Mobile Documents/com~apple~CloudDocs/title-TODO"
-);
-const STATE_FILE = path.join(ICLOUD_DIR, "obsidian-sync-state.json");
-const RAW_OUTPUTS_FILE = path.join(ICLOUD_DIR, "obsidian-triage-raw-outputs.json");
+const STATE_FILE = path.join(DATA_DIR, "obsidian-sync-state.json");
+const RAW_OUTPUTS_FILE = path.join(DATA_DIR, "obsidian-triage-raw-outputs.json");
 
 const DEFAULT_TRIAGE_PROMPT = loadPrompt("obsidian-triage.txt");
 
@@ -61,6 +57,8 @@ function sleep(ms: number) {
 
 // GET: return current state (prompt, results, stats)
 export async function GET() {
+  const unavailable = obsidianUnavailable();
+  if (unavailable) return unavailable;
   const state = loadState();
 
   const allNotes = getAllNotes();
@@ -90,6 +88,8 @@ export async function GET() {
 
 // POST: run triage (accepts optional custom prompt, force flag)
 export async function POST(request: NextRequest) {
+  const unavailable = obsidianUnavailable();
+  if (unavailable) return unavailable;
   const body = await request.json();
   const { prompt, force = false } = body;
 

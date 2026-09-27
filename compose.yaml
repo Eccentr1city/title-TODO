@@ -1,0 +1,10 @@
+services:
+  title-todo:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - /srv/data/title-todo:/data
+    # ANTHROPIC_API_KEY
+    env_file: /srv/secrets/title-todo.env
