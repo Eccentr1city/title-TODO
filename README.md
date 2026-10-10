@@ -4,7 +4,7 @@ Magic TODO lists powered by LLMs. A Next.js app with a SQLite backend (Drizzle O
 
 - **Magic input** — dump free-form text and let the model turn it into structured todos
 - **Ask** — ask questions about a list ("what should I do first?")
-- **Refactor** — have the model reorganize/merge/split lists, with undo
+- **Refactor** — chat with the model about reorganizing lists (merge/split/move/edit), then apply its actions
 - **Obsidian sync** — triage items from an Obsidian vault into lists
 - Manual priority sorting, inline editing, auto-refresh
 - **Reminder notifications** — Web Push to the home-screen app when a todo's reminder time arrives (once per reminder/snooze), plus an app-icon badge counting due items
@@ -45,9 +45,8 @@ src/app/          Next.js app router (pages + API routes)
 src/app/api/      ask, inbox-filter, lists, magic, obsidian, refactor, todos
 src/components/   UI: Sidebar, TodoCard, TodoEditor, MagicInput, AskAboutList, ...
 src/db/           Drizzle schema + SQLite connection
-src/lib/          Anthropic client, prompt loading, priority logic, types
+src/lib/          Anthropic client (structured outputs), todo import, push, reminders, Obsidian helpers, priority logic, types
 src/prompts/      Prompt templates (.txt) for each LLM feature
-scripts/          obsidian-triage.ts
 data/todos.db     SQLite fallback location (see below)
 ```
 

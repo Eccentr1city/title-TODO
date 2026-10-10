@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { lists } from "@/db/schema";
+import { lists, type NewList } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { listJSON } from "@/lib/serialize";
 
 export async function PATCH(
   request: NextRequest,
@@ -15,7 +16,7 @@ export async function PATCH(
     return NextResponse.json({ error: "List not found" }, { status: 404 });
   }
 
-  const updates: Record<string, unknown> = {};
+  const updates: Partial<NewList> = {};
 
   if (body.name !== undefined) {
     const name = String(body.name).trim();
@@ -36,12 +37,6 @@ export async function PATCH(
     return NextResponse.json({ error: "No updates provided" }, { status: 400 });
   }
 
-  await db.update(lists).set(updates).where(eq(lists.id, id));
-
-  const [updated] = await db.select().from(lists).where(eq(lists.id, id)).limit(1);
-  return NextResponse.json({
-    ...updated,
-    createdAt: updated.createdAt.toISOString(),
-    tags: updated.tags || [],
-  });
+  const [updated] = db.update(lists).set(updates).where(eq(lists.id, id)).returning().all();
+  return NextResponse.json(listJSON(updated));
 }

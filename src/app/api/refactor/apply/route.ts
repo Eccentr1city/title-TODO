@@ -32,7 +32,7 @@ interface RefactorAction {
   items?: ItemEdit[];
 }
 
-async function applyAction(action: RefactorAction) {
+function applyAction(action: RefactorAction) {
   const { action: type, listIds, newName, newSummary, newTags, splits } = action;
 
   switch (type) {
@@ -236,8 +236,7 @@ async function applyAction(action: RefactorAction) {
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
-  // Support both single suggestion (legacy) and array of actions
-  const actions: RefactorAction[] = body.actions || (body.suggestion ? [body.suggestion] : []);
+  const actions: RefactorAction[] = Array.isArray(body.actions) ? body.actions : [];
 
   if (actions.length === 0) {
     return NextResponse.json({ error: "No actions provided" }, { status: 400 });
@@ -248,10 +247,11 @@ export async function POST(request: NextRequest) {
 
   for (const action of actions) {
     try {
-      const result = await applyAction(action);
-      results.push(result);
+      // Each action is all-or-nothing, so a failure midway (e.g. a bad list id
+      // after the merged list was created) can't leave half-applied changes.
+      results.push(db.transaction(() => applyAction({ ...action, listIds: action.listIds ?? [] })));
     } catch (err) {
-      errors.push(`${action.action}: ${String(err)}`);
+      errors.push(`${action.action}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

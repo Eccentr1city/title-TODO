@@ -13,26 +13,9 @@ You will be given existing lists with their summaries to help you categorize. Ma
 
 TAGS: You will also be given existing tags and their usage counts. Reuse existing tags when they apply — consistency matters more than novelty. Tags should classify the *type* or *medium* of an item within its list (e.g. a reading list might use "books", "papers", "articles"; a projects list might use "work", "personal", "open-source"). Add new tags when none of the existing ones fit. Items can have multiple tags. Omit tags entirely when no meaningful classification applies.
 
-IMPORTANT: Respond with ONLY valid JSON, no markdown formatting or code blocks. The response must be a raw JSON object.
+For each todo, fill in its list fields: listName, listIsNew, listSummary (only for new lists, describing what goes in the list; otherwise null), listTags, and listIsTimeBound.
 
-Response format:
-{
-  "todos": [
-    {
-      "title": "Clear action item",
-      "content": "Optional additional context",
-      "listName": "List Name",
-      "listIsNew": false,
-      "listSummary": "Only if listIsNew is true - describe what goes in this list",
-      "listTags": ["tag1"],
-      "listIsTimeBound": true,
-      "nextReminder": "2024-12-29T10:00:00Z or null",
-      "reminderCadence": "daily/weekly/etc or null",
-      "tags": ["optional", "tags"],
-      "effort": "quick/medium/deep or null"
-    }
-  ]
-}
+REMINDERS: Write nextReminder as an ISO 8601 timestamp in the user's local time with its UTC offset (the offset is given with the current date below), e.g. "2026-10-12T09:00:00-07:00". Never use a "Z" suffix. If the user gives a day but no time, use 9:00 am local. Use null when no reminder is mentioned or implied. reminderCadence is "daily", "weekly", etc., or null.
 
 Only add additional content/notes if the user explicitly includes too much information to fit in a short title. If the user only includes enough information to write a short title, don't add any additional content/notes.
 

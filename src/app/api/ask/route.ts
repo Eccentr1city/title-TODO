@@ -4,6 +4,7 @@ import { lists, todos } from "@/db/schema";
 import { streamChatResponse } from "@/lib/chat-stream";
 import { eq } from "drizzle-orm";
 import { loadPrompt } from "@/lib/prompts";
+import { promptNow } from "@/lib/dates";
 
 export async function POST(request: NextRequest) {
   const { listId, question } = await request.json();
@@ -22,12 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "List not found" }, { status: 404 });
   }
 
-  // Get all todos in this list
-  const listTodos = await db
-    .select()
-    .from(todos)
-    .where(eq(todos.listId, listId))
-    .all();
+  const listTodos = db.select().from(todos).where(eq(todos.listId, listId)).all();
 
   const activeTodos = listTodos.filter((t) => t.status === "active");
   const completedTodos = listTodos.filter((t) => t.status === "completed");
@@ -50,11 +46,7 @@ ${todosContext || "No items yet"}
 
 ${completedTodos.length > 0 ? `\nCompleted items: ${completedTodos.length}` : ""}`;
 
-  const datetime = new Date().toLocaleString("en-US", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZoneName: "short",
-  });
-  const systemPrompt = loadPrompt("ask.txt").replace("{DATETIME}", datetime);
+  const systemPrompt = loadPrompt("ask.txt").replace("{DATETIME}", promptNow());
 
   return streamChatResponse({
     model: "medium",

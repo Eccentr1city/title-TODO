@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { and, eq, inArray, notExists } from "drizzle-orm";
 import { db } from "@/db";
 import { todos, lists } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
 
+// Undo a magic input: delete the todos it created, then any lists it created
+// that are now empty.
 export async function POST(request: NextRequest) {
   const { todoIds, listIds } = await request.json();
 
@@ -10,34 +12,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "todoIds array is required" }, { status: 400 });
   }
 
-  const deletedTodoIds: string[] = [];
+  return NextResponse.json(
+    db.transaction((tx) => {
+      const deletedTodoIds = tx
+        .delete(todos)
+        .where(inArray(todos.id, todoIds))
+        .returning({ id: todos.id })
+        .all()
+        .map((r) => r.id);
 
-  for (const id of todoIds) {
-    const [todo] = await db.select().from(todos).where(eq(todos.id, id)).limit(1);
-    if (!todo) continue;
+      const deletedListIds =
+        Array.isArray(listIds) && listIds.length > 0
+          ? tx
+              .delete(lists)
+              .where(
+                and(
+                  inArray(lists.id, listIds),
+                  notExists(tx.select().from(todos).where(eq(todos.listId, lists.id)))
+                )
+              )
+              .returning({ id: lists.id })
+              .all()
+              .map((r) => r.id)
+          : [];
 
-    await db.delete(todos).where(eq(todos.id, id));
-    deletedTodoIds.push(id);
-  }
-
-  // Delete newly created lists that are now empty
-  const deletedListIds: string[] = [];
-  if (Array.isArray(listIds) && listIds.length > 0) {
-    for (const listId of listIds) {
-      const remaining = db
-        .select({ count: sql<number>`count(*)` })
-        .from(todos)
-        .where(eq(todos.listId, listId))
-        .get();
-      if (remaining && remaining.count === 0) {
-        await db.delete(lists).where(eq(lists.id, listId));
-        deletedListIds.push(listId);
-      }
-    }
-  }
-
-  return NextResponse.json({
-    deletedTodoIds,
-    deletedListIds,
-  });
+      return { deletedTodoIds, deletedListIds };
+    })
+  );
 }

@@ -1,4 +1,5 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 import { streamChatResponse } from "@/lib/chat-stream";
 import { db } from "@/db";
 import { lists, todos } from "@/db/schema";
@@ -24,12 +25,11 @@ ${itemLines || "    (empty)"}`;
   return listsWithItems.join("\n\n");
 }
 
-
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { messages } = body as {
-    messages: { role: "user" | "assistant"; content: string }[];
-  };
+  const { messages } = (await request.json()) as { messages: Anthropic.MessageParam[] };
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return NextResponse.json({ error: "messages is required" }, { status: 400 });
+  }
 
   const today = localDateISO();
   const listsContext = getListsContext();

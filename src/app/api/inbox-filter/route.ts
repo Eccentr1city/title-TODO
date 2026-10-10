@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
 import path from "path";
 import { DATA_DIR } from "@/lib/paths";
+import { readJson, writeJson } from "@/lib/json-file";
 
 const FILTER_FILE = path.join(DATA_DIR, "inbox-filter.json");
 
@@ -16,32 +16,22 @@ interface InboxFilter {
 const DEFAULT_FILTER: InboxFilter = { mode: "blacklist", blacklistIds: [], whitelistIds: [] };
 
 function loadFilter(): InboxFilter {
-  if (!fs.existsSync(FILTER_FILE)) return DEFAULT_FILTER;
-  try {
-    const raw = JSON.parse(fs.readFileSync(FILTER_FILE, "utf-8"));
-    // Migrate the old {mode, listIds} shape: assign listIds to the active mode
-    if (Array.isArray(raw.listIds)) {
-      return {
-        mode: raw.mode === "whitelist" ? "whitelist" : "blacklist",
-        blacklistIds: raw.mode === "blacklist" ? raw.listIds : [],
-        whitelistIds: raw.mode === "whitelist" ? raw.listIds : [],
-      };
-    }
+  const raw = readJson<Record<string, unknown> | null>(FILTER_FILE, null);
+  if (!raw) return DEFAULT_FILTER;
+  const mode = raw.mode === "whitelist" ? "whitelist" : "blacklist";
+  // Migrate the old {mode, listIds} shape: assign listIds to the active mode
+  if (Array.isArray(raw.listIds)) {
     return {
-      mode: raw.mode === "whitelist" ? "whitelist" : "blacklist",
-      blacklistIds: Array.isArray(raw.blacklistIds) ? raw.blacklistIds : [],
-      whitelistIds: Array.isArray(raw.whitelistIds) ? raw.whitelistIds : [],
+      mode,
+      blacklistIds: mode === "blacklist" ? raw.listIds : [],
+      whitelistIds: mode === "whitelist" ? raw.listIds : [],
     };
-  } catch {
-    return DEFAULT_FILTER;
   }
-}
-
-function saveFilter(filter: InboxFilter) {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  fs.writeFileSync(FILTER_FILE, JSON.stringify(filter, null, 2));
+  return {
+    mode,
+    blacklistIds: Array.isArray(raw.blacklistIds) ? raw.blacklistIds : [],
+    whitelistIds: Array.isArray(raw.whitelistIds) ? raw.whitelistIds : [],
+  };
 }
 
 export async function GET() {
@@ -55,6 +45,6 @@ export async function PUT(request: NextRequest) {
     blacklistIds: Array.isArray(body.blacklistIds) ? body.blacklistIds : [],
     whitelistIds: Array.isArray(body.whitelistIds) ? body.whitelistIds : [],
   };
-  saveFilter(filter);
+  writeJson(FILTER_FILE, filter);
   return NextResponse.json(filter);
 }

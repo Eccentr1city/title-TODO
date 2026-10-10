@@ -30,5 +30,4 @@ Answer NO for both if the note is:
 - Empty or near-empty notes
 - Addresses, keys, credentials, or reference data
 
-Respond with ONLY a JSON object (no markdown, no code fences) in this exact format:
-{"has_personal": true/false, "has_work": true/false, "personal_summary": "brief description of personal TODOs found, or empty string", "work_summary": "brief description of work TODOs found, or empty string"}
+Report has_personal and has_work, each with a brief summary of the TODOs found (empty string when there are none).

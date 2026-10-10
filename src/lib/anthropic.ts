@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type { z } from "zod";
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -11,46 +13,54 @@ export const MODELS = {
 } as const;
 
 export type ModelTier = keyof typeof MODELS;
+export type Effort = "low" | "medium" | "high";
 
-export async function chat(
-  messages: Anthropic.MessageParam[],
-  options: {
-    model?: ModelTier;
-    system?: string;
-    maxTokens?: number;
-    // All tiers think by default (default effort: Haiku/Opus "medium",
-    // Sonnet "high"), which can burn the whole token budget on thinking for
-    // large contexts. Lower effort for latency-sensitive routes.
-    effort?: "low" | "medium" | "high";
-  } = {}
-) {
-  // Thinking tokens count against max_tokens — keep headroom so answers don't truncate.
-  const { model = "cheap", system, maxTokens = 4096, effort } = options;
+// All tiers think by default (default effort: Haiku/Opus "medium", Sonnet
+// "high"), and thinking tokens count against max_tokens. Lower effort for
+// latency-sensitive routes and leave headroom so answers don't truncate.
+type CallOptions = {
+  model?: ModelTier;
+  system?: string;
+  maxTokens?: number;
+  effort?: Effort;
+  // SDK retries 429/5xx with backoff; bulk callers (Obsidian triage) raise it.
+  maxRetries?: number;
+};
 
-  const response = await anthropic.messages.create({
-    model: MODELS[model],
-    max_tokens: maxTokens,
-    system: system,
-    messages: messages,
-    ...(effort ? { output_config: { effort } } : {}),
-  });
-
+function checkStop(response: Anthropic.Message): void {
   if (response.stop_reason === "refusal") {
     throw new Error("Model declined the request (stop_reason: refusal)");
   }
-
-  const textBlock = response.content.find((block) => block.type === "text");
-  const text = textBlock?.type === "text" ? textBlock.text : "";
-
-  // Thinking counts against max_tokens; if the budget ran out before any
-  // visible text was produced, fail loudly instead of returning "".
-  if (!text && response.stop_reason === "max_tokens") {
+  if (response.stop_reason === "max_tokens") {
     throw new Error(
-      "Response hit max_tokens before producing text (thinking consumed the budget) — raise maxTokens or lower effort"
+      "Response hit max_tokens before finishing (thinking consumed the budget) — raise maxTokens or lower effort"
     );
   }
-
-  return text;
 }
 
+// One-shot request whose reply is constrained to `schema` (structured outputs),
+// so callers get a validated object instead of scraping JSON out of prose.
+export async function structured<S extends z.ZodType>(
+  schema: S,
+  messages: Anthropic.MessageParam[],
+  options: CallOptions = {}
+): Promise<z.infer<S>> {
+  const { model = "cheap", system, maxTokens = 16000, effort, maxRetries } = options;
 
+  const response = await anthropic.messages.parse(
+    {
+      model: MODELS[model],
+      max_tokens: maxTokens,
+      system,
+      messages,
+      output_config: { format: zodOutputFormat(schema), ...(effort ? { effort } : {}) },
+    },
+    maxRetries === undefined ? undefined : { maxRetries }
+  );
+
+  checkStop(response);
+  if (response.parsed_output == null) {
+    throw new Error("Model output didn't match the expected schema");
+  }
+  return response.parsed_output as z.infer<S>;
+}

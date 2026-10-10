@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { anthropic, MODELS, ModelTier } from "./anthropic";
+import { anthropic, MODELS, type Effort, type ModelTier } from "./anthropic";
 
 // Shared backend for all conversational LLM routes (ask, refactor chat,
 // obsidian plan/manual). Streams raw text chunks so the client can render
@@ -10,7 +10,7 @@ export function streamChatResponse(opts: {
   system?: string;
   messages: Anthropic.MessageParam[];
   maxTokens?: number;
-  effort?: "low" | "medium" | "high";
+  effort?: Effort;
   // Emitted to the client before any model output (e.g. warnings about
   // missing files) so routes don't need a separate JSON side-channel.
   prefix?: string;

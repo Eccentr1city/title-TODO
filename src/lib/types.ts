@@ -26,26 +26,3 @@ export interface TodoList {
   createdAt: string;
   itemCount: number;
 }
-
-// API request/response types
-export interface MagicInputResponse {
-  todos: Array<{
-    title: string;
-    content?: string;
-    listName: string;
-    listIsNew: boolean;
-    listSummary?: string;
-    listTags?: string[];
-    listIsTimeBound?: boolean;
-    nextReminder?: string;
-    reminderCadence?: string;
-    tags?: string[];
-    effort?: "quick" | "medium" | "deep";
-  }>;
-}
-
-export interface AskListResponse {
-  response: string;
-}
-
-
