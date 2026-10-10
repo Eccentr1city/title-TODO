@@ -1,0 +1,9 @@
+The user and an assistant have been discussing how to reorganize the lists in the user's TODO app. The user has pressed Implement: turn the changes they agreed on into actions for the app to apply. Include only changes the user agreed to, and include all of them. If nothing has been agreed, return no actions.
+
+The current lists and their items:
+
+{LISTS_CONTEXT}
+
+---
+
+{ACTIONS}

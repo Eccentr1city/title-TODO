@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { todos, type NewTodo } from "@/db/schema";
 import { todoJSON } from "@/lib/serialize";
+import { nextOccurrence } from "@/lib/cadence";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -25,6 +26,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (body.status !== undefined) {
     updates.status = body.status;
     updates.completedAt = body.status === "completed" ? new Date() : null;
+
+    // Completing a recurring todo reschedules it rather than closing it
+    if (body.status === "completed") {
+      const current = db.select().from(todos).where(eq(todos.id, id)).get();
+      const cadence = body.reminderCadence !== undefined ? body.reminderCadence : current?.reminderCadence;
+      const next = nextOccurrence(cadence, current?.nextReminder ?? null);
+      if (next) {
+        updates.status = "active";
+        updates.completedAt = null;
+        updates.nextReminder = next;
+      }
+    }
   }
   if (body.tags !== undefined) updates.tags = body.tags;
   if (body.effort !== undefined) updates.effort = body.effort;

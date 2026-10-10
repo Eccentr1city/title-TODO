@@ -7,15 +7,27 @@ import { DATA_DIR } from "@/lib/paths";
 const dbPath = path.join(DATA_DIR, "todos.db");
 const sqlite = new Database(dbPath);
 
-// Enable WAL mode for better concurrency
-sqlite.pragma("journal_mode = WAL");
+// `next build` opens the database from many workers at once. Switching to WAL
+// and the setup transaction can then fail with SQLITE_BUSY without waiting on
+// the busy timeout, so retry them briefly.
+function retryBusy<T>(fn: () => T): T {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return fn();
+    } catch (err) {
+      if ((err as { code?: string }).code !== "SQLITE_BUSY" || attempt >= 100) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+}
+
+retryBusy(() => sqlite.pragma("journal_mode = WAL"));
 
 export const db = drizzle(sqlite, { schema });
 
-// Initialize tables and migrate. One IMMEDIATE transaction takes the write
-// lock up front: `next build` opens the database from many workers at once,
-// and concurrent check-then-ALTER sequences otherwise deadlock (SQLITE_BUSY).
-sqlite.transaction(() => {
+// Initialize tables and migrate in one IMMEDIATE transaction, which takes the
+// write lock up front so concurrent check-then-ALTER sequences can't deadlock.
+retryBusy(() => sqlite.transaction(() => {
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS lists (
       id TEXT PRIMARY KEY,
@@ -76,4 +88,4 @@ sqlite.transaction(() => {
       "UPDATE todos SET notified_reminder = next_reminder WHERE next_reminder IS NOT NULL AND next_reminder <= unixepoch()"
     );
   }
-}).immediate();
+}).immediate());

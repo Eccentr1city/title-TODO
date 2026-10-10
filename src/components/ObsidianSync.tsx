@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { readTextStream } from "@/lib/stream-client";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import { Chat, type ChatMessage } from "./Chat";
+import { ResultCard } from "./ResultCard";
 
-interface TriageNote {
+type TriageNote = {
   filename: string;
   has_personal: boolean;
   has_work: boolean;
   personal_summary: string;
   work_summary: string;
-}
+};
 
-interface SyncStatus {
+type Status = {
   lastRunAt: string;
   triagePrompt: string;
   totalProcessed: number;
@@ -19,892 +21,283 @@ interface SyncStatus {
   newOrModifiedCount: number;
   personalNotes: TriageNote[];
   workNotes: TriageNote[];
-}
+  vaultAvailable: boolean;
+};
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
+type ApplyResult = {
+  createdLists: string[];
+  createdTodos: { list: string; title: string }[];
+  errors: string[];
+};
 
-interface ObsidianSyncProps {
-  onComplete: () => void;
-  onCancel: () => void;
-}
+type Filter = "personal" | "work" | "both";
 
-type SyncStage =
-  | "overview"
-  | "edit-triage-prompt"
-  | "triage-running"
-  | "triage-results"
-  | "edit-plan-prompt"
-  | "planning"
-  | "applying"
-  | "done"
-  | "manual-files"
-  | "manual-planning"
-  | "manual-applying"
-  | "manual-done";
+type Stage =
+  | { name: "overview" }
+  | { name: "plan"; filter: Filter }
+  | { name: "files"; filePaths: string[] }
+  | { name: "done"; result: ApplyResult };
 
-export function ObsidianSync({ onComplete, onCancel }: ObsidianSyncProps) {
-  const [stage, setStage] = useState<SyncStage>("overview");
-  const [status, setStatus] = useState<SyncStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+const btn = "incandescent-button";
+const primary = "incandescent-button bg-accent/20 border-accent text-accent disabled:opacity-30";
 
-  // Triage state
+// Import TODOs from the Obsidian vault: triage notes with Haiku, plan with
+// Sonnet in a conversation, then apply the agreed plan.
+export function ObsidianSync({ onApplied, onDone }: { onApplied: () => void; onDone: () => void }) {
+  const [status, setStatus] = useState<Status | null>(null);
+  const [stage, setStage] = useState<Stage>({ name: "overview" });
+  const [error, setError] = useState<string | null>(null);
+
+  // Overview controls
   const [triagePrompt, setTriagePrompt] = useState("");
-  const [forceReprocess, setForceReprocess] = useState(false);
-  const [triageResults, setTriageResults] = useState<{
-    processed: number;
-    personalCount: number;
-    workCount: number;
-  } | null>(null);
+  const [editingPrompt, setEditingPrompt] = useState(false);
+  const [force, setForce] = useState(false);
+  const [triaging, setTriaging] = useState(false);
+  const [triageSummary, setTriageSummary] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("personal");
+  const [filePaths, setFilePaths] = useState("");
+  const [applying, setApplying] = useState(false);
 
-  // Plan state
-  const [planPrompt, setPlanPrompt] = useState("");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Apply state
-  const [applyResults, setApplyResults] = useState<{
-    createdLists: string[];
-    createdTodos: { list: string; title: string }[];
-    errors: string[];
-  } | null>(null);
-
-  // Manual file state
-  const [manualFilePaths, setManualFilePaths] = useState("");
-  const [manualMessages, setManualMessages] = useState<ChatMessage[]>([]);
-  const [manualInput, setManualInput] = useState("");
-  const [manualSending, setManualSending] = useState(false);
-  const manualEndRef = useRef<HTMLDivElement>(null);
-
-  // UI state
-  const [showWork, setShowWork] = useState(false);
+  const loadStatus = async () => {
+    try {
+      const s = await api<Status>("/api/obsidian");
+      setStatus(s);
+      setTriagePrompt(s.triagePrompt);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   useEffect(() => {
-    fetchStatus();
+    loadStatus();
   }, []);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
-
-  useEffect(() => {
-    manualEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [manualMessages]);
-
-  const fetchStatus = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/obsidian");
-      const data = await res.json();
-      setStatus(data);
-      setTriagePrompt(data.triagePrompt);
-    } catch (err) {
-      console.error("Failed to fetch obsidian status:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const runTriage = async () => {
-    setStage("triage-running");
+    setTriaging(true);
+    setError(null);
     try {
-      const res = await fetch("/api/obsidian", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: triagePrompt, force: forceReprocess }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        window.alert(data.error ?? "Triage failed.");
-        setStage("overview");
-        return;
-      }
-      setTriageResults(data);
-      setStage("triage-results");
-      await fetchStatus();
+      const r = await api<{ processed: number; personalCount?: number; workCount?: number; message?: string }>(
+        "/api/obsidian",
+        { body: { prompt: triagePrompt, force } }
+      );
+      setTriageSummary(
+        r.message ?? `Triaged ${r.processed} notes: ${r.personalCount} with personal TODOs, ${r.workCount} with work TODOs.`
+      );
+      setEditingPrompt(false);
+      await loadStatus();
     } catch (err) {
-      console.error("Triage failed:", err);
-      setStage("overview");
-    }
-  };
-
-  const startPlanning = async () => {
-    // Fetch the default plan prompt
-    const res = await fetch("/api/obsidian/plan");
-    const data = await res.json();
-    setPlanPrompt(data.defaultPrompt);
-    setStage("edit-plan-prompt");
-  };
-
-  const beginConversation = async () => {
-    setStage("planning");
-    setChatMessages([]);
-
-    // Send initial message to Sonnet
-    const initialMessage = "Please review these notes and propose which TODOs are still relevant, grouped by category. Ask me about anything you're unsure about.";
-    setChatMessages([{ role: "user", content: initialMessage }]);
-    setIsSending(true);
-
-    try {
-      const res = await fetch("/api/obsidian/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: initialMessage }],
-          systemPrompt: planPrompt,
-          filter: "personal",
-        }),
-      });
-      setChatMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-      await readTextStream(res, (text) => {
-        setChatMessages((prev) => [
-          ...prev.slice(0, -1),
-          { role: "assistant", content: text },
-        ]);
-      });
-    } catch (err) {
-      console.error("Planning failed:", err);
-      setChatMessages((prev) => [
-        ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
-        { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
-      ]);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsSending(false);
+      setTriaging(false);
     }
   };
 
-  const sendChatMessage = async () => {
-    if (!chatInput.trim() || isSending) return;
-
-    const userMessage = chatInput.trim();
-    setChatInput("");
-    const updatedMessages = [...chatMessages, { role: "user" as const, content: userMessage }];
-    setChatMessages(updatedMessages);
-    setIsSending(true);
-
+  const apply = async (messages: ChatMessage[]) => {
+    const plan = [...messages].reverse().find((m) => m.role === "assistant")?.content;
+    if (!plan) return;
+    setApplying(true);
+    setError(null);
     try {
-      const res = await fetch("/api/obsidian/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: updatedMessages,
-          systemPrompt: planPrompt,
-          filter: "personal",
-        }),
-      });
-      setChatMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-      await readTextStream(res, (text) => {
-        setChatMessages((prev) => [
-          ...prev.slice(0, -1),
-          { role: "assistant", content: text },
-        ]);
-      });
+      const result = await api<ApplyResult>("/api/obsidian/apply", { body: { plan } });
+      setStage({ name: "done", result });
+      onApplied();
     } catch (err) {
-      console.error("Chat failed:", err);
-      setChatMessages((prev) => [
-        ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
-        { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
-      ]);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsSending(false);
+      setApplying(false);
     }
   };
 
-  const applyPlan = async () => {
-    setStage("applying");
+  const chatActions = (messages: ChatMessage[], busy: boolean) => (
+    <>
+      <button onClick={() => apply(messages)} disabled={busy || applying || messages.length < 2} className={primary}>
+        {applying ? "Creating TODOs…" : "Apply plan"}
+      </button>
+      <button onClick={() => setStage({ name: "overview" })} disabled={applying} className={btn}>
+        Back
+      </button>
+      {error && <span className="text-sm text-error self-center">{error}</span>}
+    </>
+  );
 
-    // Extract the plan from the last assistant message
-    const lastAssistant = [...chatMessages]
-      .reverse()
-      .find((m) => m.role === "assistant");
-    const plan = lastAssistant?.content || "";
-
-    try {
-      const res = await fetch("/api/obsidian/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan,
-          conversationHistory: chatMessages,
-        }),
-      });
-      if (!res.ok) throw new Error(`Apply failed (HTTP ${res.status})`);
-      const data = await res.json();
-      setApplyResults(data);
-      setStage("done");
-    } catch (err) {
-      console.error("Apply failed:", err);
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error applying the plan: ${err instanceof Error ? err.message : String(err)}. Nothing may have been saved — check and try again.` },
-      ]);
-      setStage("planning");
-    }
-  };
-
-  const startManualPlanning = () => {
-    const paths = manualFilePaths
-      .split("\n")
-      .map((p) => p.trim())
-      .filter(Boolean);
-    if (paths.length === 0) return;
-
-    setStage("manual-planning");
-    setManualMessages([]);
-
-    const initialMessage = "Please review these notes and propose TODOs. Ask me about anything you're unsure about.";
-    setManualMessages([{ role: "user", content: initialMessage }]);
-    setManualSending(true);
-
-    fetch("/api/obsidian/manual", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filePaths: paths,
-        messages: [{ role: "user", content: initialMessage }],
-      }),
-    })
-      .then(async (res) => {
-        setManualMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-        await readTextStream(res, (text) => {
-          setManualMessages((prev) => [
-            ...prev.slice(0, -1),
-            { role: "assistant", content: text },
-          ]);
-        });
-      })
-      .catch((err) => {
-        setManualMessages((prev) => [
-          ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
-          { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
-        ]);
-      })
-      .finally(() => setManualSending(false));
-  };
-
-  const sendManualMessage = async () => {
-    if (!manualInput.trim() || manualSending) return;
-
-    const userMessage = manualInput.trim();
-    setManualInput("");
-    const updatedMessages = [...manualMessages, { role: "user" as const, content: userMessage }];
-    setManualMessages(updatedMessages);
-    setManualSending(true);
-
-    const paths = manualFilePaths.split("\n").map((p) => p.trim()).filter(Boolean);
-
-    try {
-      const res = await fetch("/api/obsidian/manual", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filePaths: paths, messages: updatedMessages }),
-      });
-      setManualMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-      await readTextStream(res, (text) => {
-        setManualMessages((prev) => [
-          ...prev.slice(0, -1),
-          { role: "assistant", content: text },
-        ]);
-      });
-    } catch (err) {
-      setManualMessages((prev) => [
-        ...prev.filter((m, i) => i < prev.length - 1 || m.content !== ""),
-        { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "failed to get response"}` },
-      ]);
-    } finally {
-      setManualSending(false);
-    }
-  };
-
-  const applyManualPlan = async () => {
-    setStage("manual-applying");
-
-    const lastAssistant = [...manualMessages]
-      .reverse()
-      .find((m) => m.role === "assistant");
-    const plan = lastAssistant?.content || "";
-
-    try {
-      const res = await fetch("/api/obsidian/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan,
-          conversationHistory: manualMessages,
-        }),
-      });
-      if (!res.ok) throw new Error(`Apply failed (HTTP ${res.status})`);
-      const data = await res.json();
-      setApplyResults(data);
-      setStage("manual-done");
-    } catch (err) {
-      setManualMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error applying the plan: ${err instanceof Error ? err.message : String(err)}. Nothing may have been saved — check and try again.` },
-      ]);
-      setStage("manual-planning");
-    }
-  };
-
-  if (isLoading) {
+  if (stage.name === "plan") {
     return (
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="text-center py-12 text-text-muted animate-pulse">
-          Loading Obsidian sync status...
+      <Chat
+        endpoint="/api/obsidian/plan"
+        body={{ filter: stage.filter }}
+        opening="Please review these notes and propose which TODOs are still relevant, grouped by category. Ask me about anything you're unsure about."
+        placeholder="Reply to Sonnet…"
+        actions={chatActions}
+      />
+    );
+  }
+
+  if (stage.name === "files") {
+    return (
+      <Chat
+        endpoint="/api/obsidian/manual"
+        body={{ filePaths: stage.filePaths }}
+        opening="Please review these notes and propose TODOs. Ask me about anything you're unsure about."
+        placeholder="Reply to Sonnet…"
+        actions={chatActions}
+      />
+    );
+  }
+
+  if (stage.name === "done") {
+    const { result } = stage;
+    return (
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="max-w-3xl mx-auto space-y-4">
+          <ResultCard
+            title={`Created ${result.createdTodos.length} TODOs${result.createdLists.length ? ` and ${result.createdLists.length} new lists` : ""}`}
+            lines={[
+              ...result.createdLists.map((name) => `New list: ${name}`),
+              ...result.createdTodos.map((t) => `[${t.list}] ${t.title}`),
+            ]}
+            errors={result.errors}
+          />
+          <div className="flex flex-wrap gap-2">
+            <button onClick={onDone} className={primary}>Go to Inbox</button>
+            <button onClick={() => setStage({ name: "overview" })} className={btn}>Back to sync</button>
+          </div>
         </div>
       </div>
     );
   }
 
+  if (!status) {
+    return (
+      <div className="flex-1 p-6 text-center text-text-muted">
+        {error ?? <span className="animate-pulse">Loading…</span>}
+      </div>
+    );
+  }
+
+  const vault = status.vaultAvailable;
+  const notesFor = (f: Filter) =>
+    f === "personal"
+      ? status.personalNotes
+      : f === "work"
+        ? status.workNotes
+        : [...new Map([...status.personalNotes, ...status.workNotes].map((n) => [n.filename, n])).values()];
+
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
-
-        {/* ===== OVERVIEW ===== */}
-        {stage === "overview" && status && (
-          <>
-            <div className="incandescent-card p-4 space-y-2">
-              <h3 className="heat-3 font-medium">Obsidian Notes</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                <div>
-                  <div className="text-text-faint">Total notes</div>
-                  <div className="text-lg">{status.totalNotes}</div>
-                </div>
-                <div>
-                  <div className="text-text-faint">Processed</div>
-                  <div className="text-lg">{status.totalProcessed}</div>
-                </div>
-                <div>
-                  <div className="text-text-faint">New/modified</div>
-                  <div className="text-lg text-accent">{status.newOrModifiedCount}</div>
-                </div>
-                <div>
-                  <div className="text-text-faint">Last run</div>
-                  <div className="text-sm">
-                    {status.lastRunAt
-                      ? new Date(status.lastRunAt).toLocaleDateString()
-                      : "Never"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {status.personalNotes.length > 0 && (
-              <div className="incandescent-card p-4">
-                <h3 className="heat-3 font-medium mb-3">
-                  Personal TODOs ({status.personalNotes.length} notes)
-                </h3>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {status.personalNotes
-                    .sort((a, b) => a.filename.localeCompare(b.filename))
-                    .map((note) => (
-                      <div key={note.filename} className="text-sm">
-                        <span className="text-accent">{note.filename}</span>
-                        {note.personal_summary && (
-                          <span className="text-text-faint ml-2">
-                            {note.personal_summary.slice(0, 80)}...
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {status.workNotes.length > 0 && (
-              <div className="incandescent-card p-4">
-                <button
-                  onClick={() => setShowWork(!showWork)}
-                  className="heat-3 font-medium w-full text-left flex items-center justify-between"
-                >
-                  <span>Work TODOs ({status.workNotes.length} notes)</span>
-                  <span className="text-text-faint text-sm">{showWork ? "hide" : "show"}</span>
-                </button>
-                {showWork && (
-                  <div className="space-y-2 max-h-60 overflow-y-auto mt-3">
-                    {status.workNotes
-                      .sort((a, b) => a.filename.localeCompare(b.filename))
-                      .map((note) => (
-                        <div key={note.filename} className="text-sm">
-                          <span className="text-text-muted">{note.filename}</span>
-                          {note.work_summary && (
-                            <span className="text-text-faint ml-2">
-                              {note.work_summary.slice(0, 80)}...
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              {status.totalProcessed === 0 || status.newOrModifiedCount > 0 ? (
-                <button
-                  onClick={() => setStage("edit-triage-prompt")}
-                  className="incandescent-button bg-accent/20 border-accent text-accent"
-                >
-                  {status.totalProcessed === 0
-                    ? "Run triage"
-                    : `Sync ${status.newOrModifiedCount} new notes`}
-                </button>
-              ) : null}
-              {status.personalNotes.length > 0 && (
-                <button
-                  onClick={startPlanning}
-                  className="incandescent-button bg-accent/20 border-accent text-accent"
-                >
-                  Plan TODOs with Sonnet
-                </button>
-              )}
-              {status.totalProcessed > 0 && (
-                <label className="flex items-center gap-2 text-sm text-text-muted">
-                  <input
-                    type="checkbox"
-                    checked={forceReprocess}
-                    onChange={(e) => setForceReprocess(e.target.checked)}
-                  />
-                  Re-triage all
-                </label>
-              )}
-              <button
-                onClick={() => setStage("manual-files")}
-                className="incandescent-button"
-              >
-                Process specific files
-              </button>
-              <button onClick={onCancel} className="incandescent-button text-sm">Back</button>
-            </div>
-          </>
+      <div className="max-w-3xl mx-auto space-y-4">
+        {!vault && (
+          <div className="border border-border p-3 text-sm text-text-muted">
+            The notes vault isn&apos;t reachable from this server, so triage and planning are unavailable here. Past
+            triage results are shown below.
+          </div>
         )}
 
-        {/* ===== MANUAL FILE INPUT ===== */}
-        {stage === "manual-files" && (
-          <>
-            <div className="incandescent-card p-4">
-              <h3 className="heat-3 font-medium mb-3">Process Specific Notes</h3>
-              <p className="text-sm text-text-faint mb-3">
-                Enter file paths relative to your notes directory, one per line.
-                Useful for notes that Haiku didn&apos;t classify correctly.
-              </p>
-              <textarea
-                suppressHydrationWarning
-                value={manualFilePaths}
-                onChange={(e) => setManualFilePaths(e.target.value)}
-                placeholder={"movies-to-watch.md\nrecipes/favorites.md\ntravel-bucket-list.md"}
-                className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[150px]"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={startManualPlanning}
-                disabled={!manualFilePaths.trim()}
-                className="incandescent-button bg-accent/20 border-accent text-accent disabled:opacity-30"
-              >
-                Start conversation with Sonnet
-              </button>
-              <button onClick={() => setStage("overview")} className="incandescent-button">Back</button>
-            </div>
-          </>
-        )}
+        <div className="incandescent-card p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <Stat label="Notes" value={vault ? status.totalNotes : "—"} />
+            <Stat label="Triaged" value={status.totalProcessed} />
+            <Stat label="New / modified" value={vault ? status.newOrModifiedCount : "—"} accent />
+            <Stat label="Last run" value={status.lastRunAt ? new Date(status.lastRunAt).toLocaleDateString() : "never"} />
+          </div>
+        </div>
 
-        {/* ===== MANUAL PLANNING CONVERSATION ===== */}
-        {stage === "manual-planning" && (
-          <>
-            <div className="space-y-4">
-              {manualMessages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`${
-                    msg.role === "assistant"
-                      ? "incandescent-card p-4"
-                      : "bg-accent/10 border border-accent/30 p-4"
-                  }`}
-                >
-                  <div className="text-xs text-text-faint mb-2 uppercase tracking-wider">
-                    {msg.role === "assistant" ? "Sonnet" : "You"}
-                  </div>
-                  <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+        {/* Triage */}
+        <section className="incandescent-card p-4 space-y-3">
+          <h3 className="heat-3">1. Triage</h3>
+          <p className="text-sm text-text-muted">
+            Haiku reads each new or changed note and flags the ones containing personal or work TODOs.
+          </p>
+          {editingPrompt && (
+            <textarea
+              suppressHydrationWarning
+              value={triagePrompt}
+              onChange={(e) => setTriagePrompt(e.target.value)}
+              className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[240px]"
+            />
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={runTriage} disabled={!vault || triaging} className={primary}>
+              {triaging
+                ? "Triaging…"
+                : force
+                  ? "Re-triage all notes"
+                  : `Triage ${status.newOrModifiedCount} new notes`}
+            </button>
+            <button onClick={() => setEditingPrompt(!editingPrompt)} className={btn}>
+              {editingPrompt ? "Hide prompt" : "Edit prompt"}
+            </button>
+            <label className="flex items-center gap-2 text-sm text-text-muted">
+              <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+              Re-triage all
+            </label>
+          </div>
+          {triageSummary && <p className="text-sm text-accent">{triageSummary}</p>}
+        </section>
+
+        {/* Plan */}
+        <section className="incandescent-card p-4 space-y-3">
+          <h3 className="heat-3">2. Plan with Sonnet</h3>
+          <div className="flex flex-wrap gap-2 text-sm">
+            {(["personal", "work", "both"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 border ${filter === f ? "border-accent text-accent bg-accent/10" : "border-border text-text-muted"}`}
+              >
+                {f} ({notesFor(f).length})
+              </button>
+            ))}
+          </div>
+          <div className="max-h-56 overflow-y-auto space-y-1 text-sm">
+            {notesFor(filter)
+              .sort((a, b) => a.filename.localeCompare(b.filename))
+              .map((n) => (
+                <div key={n.filename} className="truncate">
+                  <span className="text-accent">{n.filename}</span>
+                  <span className="text-text-faint ml-2">
+                    {filter === "work" ? n.work_summary : n.personal_summary || n.work_summary}
+                  </span>
                 </div>
               ))}
-
-              {manualSending && (
-                <div className="incandescent-card p-4">
-                  <div className="text-xs text-text-faint mb-2 uppercase tracking-wider">Sonnet</div>
-                  <div className="animate-pulse text-text-muted">Thinking...</div>
-                </div>
-              )}
-
-              <div ref={manualEndRef} />
-            </div>
-
-            <div className="sticky bottom-0 bg-background-primary pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
-              <div className="flex gap-2">
-                <textarea
-                  suppressHydrationWarning
-                  value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendManualMessage();
-                    }
-                  }}
-                  placeholder="Respond to Sonnet..."
-                  disabled={manualSending}
-                  rows={2}
-                  className="flex-1 incandescent-input px-3 py-2 text-sm resize-none"
-                />
-                <button
-                  onClick={sendManualMessage}
-                  disabled={!manualInput.trim() || manualSending}
-                  className="incandescent-button self-end disabled:opacity-30"
-                >
-                  Send
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 sm:gap-3">
-                <button
-                  onClick={applyManualPlan}
-                  disabled={manualSending || manualMessages.length < 2}
-                  className="incandescent-button bg-accent/20 border-accent text-accent disabled:opacity-30"
-                >
-                  Apply plan
-                </button>
-                {manualMessages.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setManualMessages([]);
-                      setManualInput("");
-                    }}
-                    className="incandescent-button text-sm text-text-muted"
-                  >
-                    Clear chat
-                  </button>
-                )}
-                <button onClick={() => setStage("manual-files")} className="incandescent-button text-sm">
-                  Back
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ===== MANUAL APPLYING ===== */}
-        {stage === "manual-applying" && (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-4 animate-pulse">&#10022;</div>
-            <p className="text-text-muted">Creating TODOs from selected notes...</p>
           </div>
-        )}
+          <button onClick={() => setStage({ name: "plan", filter })} disabled={!vault || notesFor(filter).length === 0} className={primary}>
+            Start planning
+          </button>
+        </section>
 
-        {/* ===== MANUAL DONE ===== */}
-        {stage === "manual-done" && applyResults && (
-          <>
-            <div className="incandescent-card p-4">
-              <h3 className="heat-3 font-medium mb-3">TODOs Created from Manual Files!</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                <div>
-                  <div className="text-text-faint">New lists</div>
-                  <div className="text-lg">{applyResults.createdLists.length}</div>
-                </div>
-                <div>
-                  <div className="text-text-faint">New TODOs</div>
-                  <div className="text-lg text-accent">{applyResults.createdTodos.length}</div>
-                </div>
-              </div>
+        {/* Specific files */}
+        <section className="incandescent-card p-4 space-y-3">
+          <h3 className="heat-3">Or: specific notes</h3>
+          <p className="text-sm text-text-muted">Paths relative to the vault, one per line — for notes triage missed.</p>
+          <textarea
+            suppressHydrationWarning
+            value={filePaths}
+            onChange={(e) => setFilePaths(e.target.value)}
+            placeholder={"movies-to-watch.md\nrecipes/favorites.md"}
+            className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[90px]"
+          />
+          <button
+            onClick={() =>
+              setStage({ name: "files", filePaths: filePaths.split("\n").map((p) => p.trim()).filter(Boolean) })
+            }
+            disabled={!vault || !filePaths.trim()}
+            className={primary}
+          >
+            Start conversation
+          </button>
+        </section>
 
-              {applyResults.createdTodos.length > 0 && (
-                <div className="mb-3">
-                  <div className="text-xs text-text-faint uppercase mb-1">TODOs added:</div>
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {applyResults.createdTodos.map((t, i) => (
-                      <div key={i} className="text-sm">
-                        <span className="text-text-faint">[{t.list}]</span>{" "}
-                        <span>{t.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {applyResults.errors.length > 0 && (
-                <div>
-                  <div className="text-xs text-error uppercase mb-1">Errors:</div>
-                  {applyResults.errors.map((e, i) => (
-                    <div key={i} className="text-sm text-error">{e}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={onComplete}
-                className="incandescent-button bg-accent/20 border-accent text-accent"
-              >
-                Go to Inbox
-              </button>
-              <button onClick={() => setStage("overview")} className="incandescent-button">
-                Back to sync
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ===== EDIT TRIAGE PROMPT ===== */}
-        {stage === "edit-triage-prompt" && (
-          <>
-            <div className="incandescent-card p-4">
-              <h3 className="heat-3 font-medium mb-3">Triage Prompt (Haiku)</h3>
-              <p className="text-sm text-text-faint mb-3">
-                Edit the system prompt for classifying each note as personal/work/neither.
-              </p>
-              <textarea
-                suppressHydrationWarning
-                value={triagePrompt}
-                onChange={(e) => setTriagePrompt(e.target.value)}
-                className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[250px]"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button onClick={runTriage} className="incandescent-button bg-accent/20 border-accent text-accent">
-                Run triage{forceReprocess ? " (all notes)" : ""}
-              </button>
-              <button onClick={() => setStage("overview")} className="incandescent-button">Back</button>
-            </div>
-          </>
-        )}
-
-        {/* ===== TRIAGE RUNNING ===== */}
-        {stage === "triage-running" && (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-4 animate-pulse">&#10022;</div>
-            <p className="text-text-muted">Processing notes with Haiku...</p>
-            <p className="text-sm text-text-faint mt-2">This may take a few minutes.</p>
-          </div>
-        )}
-
-        {/* ===== TRIAGE RESULTS ===== */}
-        {stage === "triage-results" && triageResults && (
-          <>
-            <div className="incandescent-card p-4">
-              <h3 className="heat-3 font-medium mb-3">Triage Complete</h3>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <div className="text-text-faint">Processed</div>
-                  <div className="text-lg">{triageResults.processed}</div>
-                </div>
-                <div>
-                  <div className="text-text-faint">Personal</div>
-                  <div className="text-lg text-accent">{triageResults.personalCount}</div>
-                </div>
-                <div>
-                  <div className="text-text-faint">Work</div>
-                  <div className="text-lg text-text-muted">{triageResults.workCount}</div>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button onClick={startPlanning} className="incandescent-button bg-accent/20 border-accent text-accent">
-                Plan TODOs with Sonnet
-              </button>
-              <button onClick={() => setStage("overview")} className="incandescent-button">
-                View details
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ===== EDIT PLAN PROMPT ===== */}
-        {stage === "edit-plan-prompt" && (
-          <>
-            <div className="incandescent-card p-4">
-              <h3 className="heat-3 font-medium mb-3">Planning Prompt (Sonnet)</h3>
-              <p className="text-sm text-text-faint mb-3">
-                Edit the system prompt for the planning conversation. Sonnet will see all
-                {status ? ` ${status.personalNotes.length}` : ""} personal notes and this prompt.
-                Add any extra context or focus areas.
-              </p>
-              <textarea
-                suppressHydrationWarning
-                value={planPrompt}
-                onChange={(e) => setPlanPrompt(e.target.value)}
-                className="w-full incandescent-input px-3 py-2 text-sm font-mono resize-y min-h-[300px]"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button onClick={beginConversation} className="incandescent-button bg-accent/20 border-accent text-accent">
-                Start conversation
-              </button>
-              <button onClick={() => setStage("overview")} className="incandescent-button">Back</button>
-            </div>
-          </>
-        )}
-
-        {/* ===== PLANNING CONVERSATION ===== */}
-        {stage === "planning" && (
-          <>
-            {/* Chat messages */}
-            <div className="space-y-4">
-              {chatMessages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`${
-                    msg.role === "assistant"
-                      ? "incandescent-card p-4"
-                      : "bg-accent/10 border border-accent/30 p-4"
-                  }`}
-                >
-                  <div className="text-xs text-text-faint mb-2 uppercase tracking-wider">
-                    {msg.role === "assistant" ? "Sonnet" : "You"}
-                  </div>
-                  <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
-                </div>
-              ))}
-
-              {isSending && (
-                <div className="incandescent-card p-4">
-                  <div className="text-xs text-text-faint mb-2 uppercase tracking-wider">Sonnet</div>
-                  <div className="animate-pulse text-text-muted">Thinking...</div>
-                </div>
-              )}
-
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Chat input */}
-            <div className="sticky bottom-0 bg-background-primary pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
-              <div className="flex gap-2">
-                <textarea
-                  suppressHydrationWarning
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendChatMessage();
-                    }
-                  }}
-                  placeholder="Respond to Sonnet..."
-                  disabled={isSending}
-                  rows={2}
-                  className="flex-1 incandescent-input px-3 py-2 text-sm resize-none"
-                />
-                <button
-                  onClick={sendChatMessage}
-                  disabled={!chatInput.trim() || isSending}
-                  className="incandescent-button self-end disabled:opacity-30"
-                >
-                  Send
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 sm:gap-3">
-                <button
-                  onClick={applyPlan}
-                  disabled={isSending || chatMessages.length < 2}
-                  className="incandescent-button bg-accent/20 border-accent text-accent disabled:opacity-30"
-                >
-                  Apply plan
-                </button>
-                {chatMessages.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setChatMessages([]);
-                      setChatInput("");
-                    }}
-                    className="incandescent-button text-sm text-text-muted"
-                  >
-                    Clear chat
-                  </button>
-                )}
-                <button onClick={() => setStage("overview")} className="incandescent-button text-sm">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ===== APPLYING ===== */}
-        {stage === "applying" && (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-4 animate-pulse">&#10022;</div>
-            <p className="text-text-muted">Creating TODOs...</p>
-            <p className="text-sm text-text-faint mt-2">
-              Generating items category by category with Sonnet.
-            </p>
-          </div>
-        )}
-
-        {/* ===== DONE ===== */}
-        {stage === "done" && applyResults && (
-          <>
-            <div className="incandescent-card p-4">
-              <h3 className="heat-3 font-medium mb-3">TODOs Created!</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                <div>
-                  <div className="text-text-faint">New lists</div>
-                  <div className="text-lg">{applyResults.createdLists.length}</div>
-                </div>
-                <div>
-                  <div className="text-text-faint">New TODOs</div>
-                  <div className="text-lg text-accent">{applyResults.createdTodos.length}</div>
-                </div>
-              </div>
-
-              {applyResults.createdLists.length > 0 && (
-                <div className="mb-3">
-                  <div className="text-xs text-text-faint uppercase mb-1">New lists created:</div>
-                  {applyResults.createdLists.map((name) => (
-                    <div key={name} className="text-sm text-accent">+ {name}</div>
-                  ))}
-                </div>
-              )}
-
-              {applyResults.createdTodos.length > 0 && (
-                <div className="mb-3">
-                  <div className="text-xs text-text-faint uppercase mb-1">TODOs added:</div>
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {applyResults.createdTodos.map((t, i) => (
-                      <div key={i} className="text-sm">
-                        <span className="text-text-faint">[{t.list}]</span>{" "}
-                        <span>{t.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {applyResults.errors.length > 0 && (
-                <div>
-                  <div className="text-xs text-error uppercase mb-1">Errors:</div>
-                  {applyResults.errors.map((e, i) => (
-                    <div key={i} className="text-sm text-error">{e}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => { onComplete(); }}
-                className="incandescent-button bg-accent/20 border-accent text-accent"
-              >
-                Go to Inbox
-              </button>
-              <button onClick={() => setStage("overview")} className="incandescent-button">
-                Back to sync
-              </button>
-            </div>
-          </>
-        )}
+        {error && <p className="text-sm text-error">{error}</p>}
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
+  return (
+    <div>
+      <div className="text-text-faint">{label}</div>
+      <div className={`text-lg ${accent ? "text-accent" : ""}`}>{value}</div>
     </div>
   );
 }

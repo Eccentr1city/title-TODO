@@ -2,12 +2,14 @@
 
 Magic TODO lists powered by LLMs. A Next.js app with a SQLite backend (Drizzle ORM) where Claude helps you capture, triage, and reorganize tasks:
 
-- **Magic input** — dump free-form text and let the model turn it into structured todos
-- **Ask** — ask questions about a list ("what should I do first?")
-- **Refactor** — chat with the model about reorganizing lists (merge/split/move/edit), then apply its actions
-- **Obsidian sync** — triage items from an Obsidian vault into lists
-- Manual priority sorting, inline editing, auto-refresh
-- **Reminder notifications** — Web Push to the home-screen app when a todo's reminder time arrives (once per reminder/snooze), plus an app-icon badge counting due items
+- **Magic input** — dump free-form text and the model turns it into todos in the right lists, with reminders (undo with one tap)
+- **Reminders** — Web Push to the home-screen app when a todo's reminder time arrives (once per reminder or snooze; tapping opens that todo), an app-icon badge counting due items, and a "Due now" section in the Inbox
+- **Repeating todos** — completing a todo with a cadence ("weekly", "every 3 days", "monthly"...) schedules its next occurrence instead of closing it
+- **Snooze** to sensible times (this evening, tomorrow morning, the weekend, next week); deleted todos go to the trash (status `archived`) with Undo
+- **Ask** — questions about a list ("what should I do first?")
+- **Refactor** — chat with Sonnet about reorganizing lists, then Implement: the server extracts the agreed changes as typed actions (structured outputs) and applies each in a transaction
+- **Obsidian import** — triage notes with Haiku, plan with Sonnet, apply the plan (needs the vault; unavailable on perihelion)
+- Priority voting, search (⌘K), inbox filter, copy a view as Markdown/JSON
 
 ## Access and hosting
 
@@ -45,7 +47,8 @@ src/app/          Next.js app router (pages + API routes)
 src/app/api/      ask, inbox-filter, lists, magic, obsidian, refactor, todos
 src/components/   UI: Sidebar, TodoCard, TodoEditor, MagicInput, AskAboutList, ...
 src/db/           Drizzle schema + SQLite connection
-src/lib/          Anthropic client (structured outputs), todo import, push, reminders, Obsidian helpers, priority logic, types
+src/lib/          Server: Anthropic client (structured outputs), todo import, refactor actions, cadence, push, reminders, Obsidian.
+                  Client: use-todos (state + mutations), api, export, snooze, push-client
 src/prompts/      Prompt templates (.txt) for each LLM feature
 data/todos.db     SQLite fallback location (see below)
 ```

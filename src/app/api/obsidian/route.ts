@@ -9,6 +9,7 @@ import {
   listNotes,
   loadSyncState,
   saveSyncState,
+  triagePromptFor,
 } from "@/lib/obsidian";
 
 function sleep(ms: number) {
@@ -26,7 +27,7 @@ export async function GET() {
 
   return NextResponse.json({
     lastRunAt: state.lastRunAt,
-    triagePrompt: state.triagePrompt,
+    triagePrompt: triagePromptFor(state),
     totalProcessed: entries.length,
     totalNotes: allNotes.length,
     newOrModifiedCount: allNotes.filter((n) => isNewOrModified(n, state)).length,
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
   const { prompt, force = false } = await request.json();
 
   const state = loadSyncState();
-  const triagePrompt = prompt || state.triagePrompt || DEFAULT_TRIAGE_PROMPT;
+  const triagePrompt = prompt?.trim() || triagePromptFor(state);
   const allNotes = listNotes();
   const notes = force ? allNotes : allNotes.filter((n) => isNewOrModified(n, state));
 
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
   );
 
   state.lastRunAt = new Date().toISOString();
-  state.triagePrompt = triagePrompt;
+  state.customTriagePrompt = triagePrompt === DEFAULT_TRIAGE_PROMPT ? undefined : triagePrompt;
   saveSyncState(state);
 
   const personal = results.filter((r) => r.has_personal);

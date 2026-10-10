@@ -9,17 +9,16 @@ import { loadSyncState, readNoteForPrompt } from "@/lib/obsidian";
 
 type Filter = "personal" | "work" | "both";
 
-const DEFAULT_PLAN_PROMPT = loadPrompt("obsidian-plan.txt");
+const PLAN_PROMPT = loadPrompt("obsidian-plan.txt");
 
-function fillPrompt(template: string) {
-  const ctx = listsAndTodosContext();
-  return {
-    ctx,
-    prompt: template
-      .replace("{TODAY}", localDateISO())
-      .replace("{EXISTING_LISTS}", ctx.listsContext)
-      .replace("{EXISTING_TODOS}", ctx.todosContext),
-  };
+const SCOPE: Record<Filter, string> = { personal: "personal", work: "work", both: "personal or work" };
+
+function fillPrompt(filter: Filter) {
+  const { listsContext, todosContext } = listsAndTodosContext();
+  return PLAN_PROMPT.replace("{SCOPE}", SCOPE[filter])
+    .replace("{TODAY}", localDateISO())
+    .replace("{EXISTING_LISTS}", listsContext)
+    .replace("{EXISTING_TODOS}", todosContext);
 }
 
 function notesContext(filter: Filter): string {
@@ -36,16 +35,15 @@ function notesContext(filter: Filter): string {
 export async function POST(request: NextRequest) {
   const unavailable = obsidianUnavailable();
   if (unavailable) return unavailable;
-  const { messages, systemPrompt, filter = "personal" } = (await request.json()) as {
+  const { messages, filter = "personal" } = (await request.json()) as {
     messages: Anthropic.MessageParam[];
-    systemPrompt?: string;
     filter?: Filter;
   };
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "messages is required" }, { status: 400 });
   }
 
-  const { prompt } = fillPrompt(systemPrompt || DEFAULT_PLAN_PROMPT);
+  const prompt = fillPrompt(filter);
 
   // The notes go into the first message only
   const messagesForApi =
@@ -53,7 +51,7 @@ export async function POST(request: NextRequest) {
       ? [
           {
             role: "user" as const,
-            content: `Here are my Obsidian notes that contain personal TODOs:\n\n${notesContext(filter)}\n\n${messages[0].content}`,
+            content: `Here are my Obsidian notes that contain ${SCOPE[filter]} TODOs:\n\n${notesContext(filter)}\n\n${messages[0].content}`,
           },
         ]
       : messages;
@@ -66,19 +64,5 @@ export async function POST(request: NextRequest) {
     messages: messagesForApi,
     maxTokens: 64000,
     effort: "medium",
-  });
-}
-
-// GET: return the default prompt and notes summary
-export async function GET() {
-  const files = Object.values(loadSyncState().processedFiles);
-  const { prompt, ctx } = fillPrompt(DEFAULT_PLAN_PROMPT);
-
-  return NextResponse.json({
-    defaultPrompt: prompt,
-    personalNoteCount: files.filter((v) => v.has_personal).length,
-    workNoteCount: files.filter((v) => v.has_work).length,
-    existingListCount: ctx.lists.length,
-    existingTodoCount: ctx.todos.length,
   });
 }

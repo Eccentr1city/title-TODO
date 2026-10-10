@@ -23,7 +23,10 @@ export type TriageResult = z.infer<typeof TriageResult>;
 
 export type SyncState = {
   lastRunAt: string;
-  triagePrompt: string;
+  // Set only when the user edits the prompt in the UI; otherwise the file is
+  // used, so prompt improvements reach triage. (A legacy `triagePrompt` field
+  // held a stale copy of the default and is ignored.)
+  customTriagePrompt?: string;
   processedFiles: Record<string, TriageResult & { mtimeMs: number }>;
 };
 
@@ -31,9 +34,13 @@ export function loadSyncState(): SyncState {
   const state = readJson<Partial<SyncState>>(STATE_FILE, {});
   return {
     lastRunAt: state.lastRunAt ?? "",
-    triagePrompt: state.triagePrompt || DEFAULT_TRIAGE_PROMPT,
+    customTriagePrompt: state.customTriagePrompt,
     processedFiles: state.processedFiles ?? {},
   };
+}
+
+export function triagePromptFor(state: SyncState): string {
+  return state.customTriagePrompt || DEFAULT_TRIAGE_PROMPT;
 }
 
 export function saveSyncState(state: SyncState): void {

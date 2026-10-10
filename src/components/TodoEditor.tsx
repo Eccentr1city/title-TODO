@@ -1,164 +1,161 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { TodoItem, TodoList } from "@/lib/types";
+import { useEffect, useState } from "react";
+import type { TodoItem, TodoList } from "@/lib/types";
 
-interface TodoEditorProps {
+type Props = {
   todo: TodoItem | null;
   lists: TodoList[];
-  onSave: (todo: Partial<TodoItem> & { id: string }) => void;
+  onSave: (id: string, updates: Partial<TodoItem>) => void;
   onClose: () => void;
+};
+
+const CADENCES = [
+  { value: "", label: "Doesn't repeat" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "2 weeks", label: "Every 2 weeks" },
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+];
+
+const EFFORTS = [
+  { value: "quick", label: "~ Quick", color: "text-success" },
+  { value: "medium", label: "o Medium", color: "text-accent" },
+  { value: "deep", label: "O Deep", color: "text-heat-6" },
+] as const;
+
+// <input type="datetime-local"> works in local wall-clock time without a zone,
+// so convert explicitly in both directions (an ISO string sliced to 16 chars
+// would be UTC, shifting the reminder by the UTC offset on every save).
+function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function TodoEditor({ todo, lists, onSave, onClose }: TodoEditorProps) {
+export function TodoEditor({ todo, lists, onSave, onClose }: Props) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [listId, setListId] = useState("");
-  const [nextReminder, setNextReminder] = useState("");
-  const [reminderCadence, setReminderCadence] = useState("");
-  const [effort, setEffort] = useState<"quick" | "medium" | "deep" | "">("");
+  const [reminder, setReminder] = useState("");
+  const [cadence, setCadence] = useState("");
+  const [effort, setEffort] = useState<TodoItem["effort"]>(null);
 
   useEffect(() => {
-    if (todo) {
-      setTitle(todo.title);
-      setContent(todo.content || "");
-      setListId(todo.listId);
-      setNextReminder(todo.nextReminder ? todo.nextReminder.slice(0, 16) : "");
-      setReminderCadence(todo.reminderCadence || "");
-      setEffort(todo.effort || "");
-    }
+    if (!todo) return;
+    setTitle(todo.title);
+    setContent(todo.content ?? "");
+    setListId(todo.listId);
+    setReminder(toLocalInput(todo.nextReminder));
+    setCadence(todo.reminderCadence ?? "");
+    setEffort(todo.effort);
   }, [todo]);
+
+  useEffect(() => {
+    if (!todo) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [todo, onClose]);
 
   if (!todo) return null;
 
-  const handleSave = () => {
-    onSave({
-      id: todo.id,
-      title,
-      content: content || null,
+  const save = () => {
+    if (!title.trim()) return;
+    onSave(todo.id, {
+      title: title.trim(),
+      content: content.trim() || null,
       listId,
-      nextReminder: nextReminder ? new Date(nextReminder).toISOString() : null,
-      reminderCadence: reminderCadence || null,
-      effort: effort || null,
+      nextReminder: reminder ? new Date(reminder).toISOString() : null,
+      reminderCadence: cadence || null,
+      effort,
     });
     onClose();
   };
 
+  const cadences = CADENCES.some((c) => c.value === cadence) ? CADENCES : [...CADENCES, { value: cadence, label: cadence }];
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-background-secondary border border-border w-full max-w-lg max-h-[90dvh] overflow-y-auto">
-        {/* Header */}
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={onClose}>
+      <div
+        className="bg-background-secondary border border-border w-full max-w-lg max-h-[90%] overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-lg heat-2">Edit TODO</h2>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-accent transition-colors text-xl"
-          >
-            x
+          <h2 className="text-lg heat-2">Edit</h2>
+          <button onClick={onClose} className="text-text-muted hover:text-accent text-xl px-2" aria-label="Close">
+            &times;
           </button>
         </div>
 
-        {/* Form */}
         <div className="p-4 space-y-4">
-          {/* Title */}
-          <div>
-            <label className="block text-sm text-text-muted mb-1">Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full incandescent-input px-3 py-2"
-            />
-          </div>
+          <Field label="Title">
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full incandescent-input px-3 py-2" />
+          </Field>
 
-          {/* Content */}
-          <div>
-            <label className="block text-sm text-text-muted mb-1">Notes</label>
+          <Field label="Notes">
             <textarea
               suppressHydrationWarning
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={3}
-              className="w-full incandescent-input px-3 py-2 resize-none"
+              className="w-full incandescent-input px-3 py-2 resize-y"
             />
-          </div>
+          </Field>
 
-          {/* List */}
-          <div>
-            <label className="block text-sm text-text-muted mb-1">List</label>
-            <select
-              value={listId}
-              onChange={(e) => setListId(e.target.value)}
-              className="w-full incandescent-input px-3 py-2"
-            >
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
+          <Field label="List">
+            <select value={listId} onChange={(e) => setListId(e.target.value)} className="w-full incandescent-input px-3 py-2">
+              {lists.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>
-          </div>
+          </Field>
 
-          {/* Reminder */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Next Reminder</label>
-              <input
-                type="datetime-local"
-                value={nextReminder}
-                onChange={(e) => setNextReminder(e.target.value)}
-                className="w-full incandescent-input px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Cadence</label>
-              <select
-                value={reminderCadence}
-                onChange={(e) => setReminderCadence(e.target.value)}
-                className="w-full incandescent-input px-3 py-2"
-              >
-                <option value="">One-time</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="2 weeks">Every 2 weeks</option>
-                <option value="monthly">Monthly</option>
+            <Field label="Reminder">
+              <div className="flex gap-2">
+                <input
+                  type="datetime-local"
+                  value={reminder}
+                  onChange={(e) => setReminder(e.target.value)}
+                  className="flex-1 min-w-0 incandescent-input px-3 py-2"
+                />
+                {reminder && (
+                  <button onClick={() => setReminder("")} className="incandescent-button px-3" aria-label="Clear reminder">
+                    &times;
+                  </button>
+                )}
+              </div>
+            </Field>
+            <Field label="Repeats">
+              <select value={cadence} onChange={(e) => setCadence(e.target.value)} className="w-full incandescent-input px-3 py-2">
+                {cadences.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
               </select>
-            </div>
+            </Field>
           </div>
 
-          {/* Effort */}
-          <div>
-            <label className="block text-sm text-text-muted mb-1">Effort</label>
+          <Field label="Effort">
             <div className="flex gap-2">
-              {[
-                { value: "quick", label: "~ Quick", color: "text-success" },
-                { value: "medium", label: "o Medium", color: "text-accent" },
-                { value: "deep", label: "O Deep", color: "text-heat-6" },
-              ].map((opt) => (
+              {EFFORTS.map((o) => (
                 <button
-                  key={opt.value}
-                  onClick={() => setEffort(opt.value as typeof effort)}
-                  className={`flex-1 py-2 border transition-all
-                             ${effort === opt.value 
-                               ? `border-accent ${opt.color} bg-background-tertiary` 
-                               : "border-border text-text-muted hover:border-border-hover"}`}
+                  key={o.value}
+                  onClick={() => setEffort(effort === o.value ? null : o.value)}
+                  className={`flex-1 py-2 border ${effort === o.value ? `border-accent ${o.color} bg-background-tertiary` : "border-border text-text-muted"}`}
                 >
-                  {opt.label}
+                  {o.label}
                 </button>
               ))}
             </div>
-          </div>
+          </Field>
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-2 p-4 border-t border-border">
-          <button onClick={onClose} className="incandescent-button">
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="incandescent-button bg-accent/20 border-accent text-accent"
-          >
+          <button onClick={onClose} className="incandescent-button">Cancel</button>
+          <button onClick={save} disabled={!title.trim()} className="incandescent-button bg-accent/20 border-accent text-accent disabled:opacity-30">
             Save
           </button>
         </div>
@@ -167,3 +164,11 @@ export function TodoEditor({ todo, lists, onSave, onClose }: TodoEditorProps) {
   );
 }
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-sm text-text-muted mb-1">{label}</div>
+      {children}
+    </div>
+  );
+}

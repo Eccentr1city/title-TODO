@@ -30,12 +30,15 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  const url = new URL(event.notification.data?.url || "/", self.location.origin);
+  const todoId = url.searchParams.get("todo");
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
-      const existing = wins.find((w) => w.url.startsWith(self.location.origin));
-      if (existing) return existing.focus();
-      return self.clients.openWindow(url);
+      const open = wins.find((w) => w.url.startsWith(self.location.origin));
+      if (!open) return self.clients.openWindow(url.href);
+      // Already running: show the todo without reloading the app
+      if (todoId) open.postMessage({ type: "open-todo", id: todoId });
+      return open.focus();
     })
   );
 });

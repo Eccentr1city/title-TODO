@@ -1,196 +1,126 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { TodoItem } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import type { TodoItem } from "@/lib/types";
+import { snoozeOptions } from "@/lib/snooze";
 
-interface TodoCardProps {
+type Props = {
   todo: TodoItem;
-  onComplete: (id: string) => void;
-  onSnooze: (id: string, until: Date) => void;
+  onComplete: (todo: TodoItem) => void;
+  onSnooze: (todo: TodoItem, until: Date) => void;
   onEdit: (todo: TodoItem) => void;
-  onDelete: (id: string) => void;
-  onVote?: (id: string, direction: "up" | "down") => void;
+  onDelete: (todo: TodoItem) => void;
+  onVote?: (todo: TodoItem, direction: "up" | "down") => void;
   priorityHeat?: string;
-  showListName?: string;
-  isHighlighted?: boolean;
+  listName?: string;
+  highlighted?: boolean;
+};
+
+const EFFORT = {
+  quick: { mark: "~", className: "text-success" },
+  medium: { mark: "o", className: "text-accent" },
+  deep: { mark: "O", className: "text-heat-6" },
+} as const;
+
+function reminderBadge(dateStr: string | null) {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  const hours = (date.getTime() - Date.now()) / 3_600_000;
+  if (hours < 0) return { text: "Due", urgent: true };
+  if (hours < 1) return { text: "< 1h", urgent: true };
+  const sameDay = date.toDateString() === new Date().toDateString();
+  if (sameDay) return { text: date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }), urgent: hours < 3 };
+  const days = Math.ceil(hours / 24);
+  if (days <= 1) return { text: "Tomorrow", urgent: false };
+  if (days < 7) return { text: date.toLocaleDateString("en-US", { weekday: "short" }), urgent: false };
+  return { text: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), urgent: false };
 }
 
-const SNOOZE_OPTIONS = [
-  { label: "+1 hour", hours: 1 },
-  { label: "+1 day", hours: 24 },
-  { label: "+1 week", hours: 168 },
-  { label: "+1 month", hours: 720 },
-];
-
-export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote, priorityHeat, showListName, isHighlighted }: TodoCardProps) {
-  const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
+export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote, priorityHeat, listName, highlighted }: Props) {
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
   const snoozeRef = useRef<HTMLDivElement>(null);
+  const done = todo.status === "completed";
+  const badge = reminderBadge(todo.nextReminder);
 
-  // Close snooze menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (snoozeRef.current && !snoozeRef.current.contains(e.target as Node)) {
-        setShowSnoozeMenu(false);
-      }
+    if (!snoozeOpen) return;
+    const close = (e: PointerEvent) => {
+      if (!snoozeRef.current?.contains(e.target as Node)) setSnoozeOpen(false);
     };
-    if (showSnoozeMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showSnoozeMenu]);
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diff = date.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
-    if (hours < 0) return { text: "Overdue", urgent: true };
-    if (hours < 1) return { text: "< 1 hour", urgent: true };
-    if (hours < 24) return { text: `${hours}h`, urgent: hours < 3 };
-    if (days === 0) return { text: "Today", urgent: true };
-    if (days === 1) return { text: "Tomorrow", urgent: false };
-    if (days < 7) return { text: date.toLocaleDateString("en-US", { weekday: "short" }), urgent: false };
-    return { text: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), urgent: false };
-  };
-
-  const handleSnooze = (hours: number) => {
-    const until = new Date();
-    until.setTime(until.getTime() + hours * 60 * 60 * 1000);
-    onSnooze(todo.id, until);
-    setShowSnoozeMenu(false);
-  };
-
-  const reminder = formatDate(todo.nextReminder);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [snoozeOpen]);
 
   return (
-    <div 
-      className={`incandescent-card p-4 animate-fade-in transition-all
-                  ${todo.status === "completed" ? "opacity-50" : ""}
-                  ${priorityHeat || ""}
-                  ${isHighlighted ? "highlight-new" : ""}`}
+    <div
+      id={`todo-${todo.id}`}
+      className={`incandescent-card p-4 animate-fade-in scroll-mt-4 ${done ? "opacity-50" : ""} ${priorityHeat ?? ""} ${highlighted ? "highlight-new" : ""}`}
     >
       <div className="flex items-start gap-3">
-        {/* Vote arrows */}
-        {onVote && todo.status !== "completed" && (
+        {onVote && !done && (
           <div className="flex flex-col items-center flex-shrink-0 -my-1">
-            <button
-              onClick={() => onVote(todo.id, "up")}
-              className="text-[11px] leading-none px-1 py-1 text-text-faint
-                         hover:text-accent transition-colors"
-              aria-label="Increase priority"
-            >
+            <button onClick={() => onVote(todo, "up")} className="text-[11px] leading-none p-1 text-text-faint hover:text-accent" aria-label="Raise priority">
               &#9650;
             </button>
-            <button
-              onClick={() => onVote(todo.id, "down")}
-              className="text-[11px] leading-none px-1 py-1 text-text-faint
-                         hover:text-text-muted transition-colors"
-              aria-label="Decrease priority"
-            >
+            <button onClick={() => onVote(todo, "down")} className="text-[11px] leading-none p-1 text-text-faint hover:text-text-muted" aria-label="Lower priority">
               &#9660;
             </button>
           </div>
         )}
 
-        {/* Checkbox */}
         <input
           type="checkbox"
-          checked={todo.status === "completed"}
-          onChange={() => onComplete(todo.id)}
+          checked={done}
+          onChange={() => onComplete(todo)}
           className="mt-1 flex-shrink-0"
+          aria-label={done ? "Mark active" : "Complete"}
         />
 
-        {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <h3 
-              className={`font-medium leading-snug
-                         ${todo.status === "completed" ? "line-through text-text-muted" : "text-text-normal"}`}
-            >
-              {todo.title}
-            </h3>
-            
-            {/* Reminder badge */}
-            {reminder && (
-              <span className={`text-xs px-2 py-0.5 border flex-shrink-0
-                               ${reminder.urgent 
-                                 ? "border-error text-error" 
-                                 : "border-border text-text-muted"}`}>
-                {reminder.text}
+            <h3 className={`leading-snug ${done ? "line-through text-text-muted" : "text-text-normal"}`}>{todo.title}</h3>
+            {badge && !done && (
+              <span className={`text-xs px-2 py-0.5 border flex-shrink-0 ${badge.urgent ? "border-error text-error" : "border-border text-text-muted"}`}>
+                {badge.text}
               </span>
             )}
           </div>
 
-          {/* Meta line */}
-          <div className="flex items-center gap-2 mt-1 text-xs text-text-faint">
-            {showListName && (
-              <span className="text-text-muted">{showListName}</span>
-            )}
-            {todo.effort && (
-              <span className={`
-                ${todo.effort === "quick" ? "text-success" : ""}
-                ${todo.effort === "medium" ? "text-accent" : ""}
-                ${todo.effort === "deep" ? "text-heat-6" : ""}
-              `}>
-                {todo.effort === "quick" && "~"}
-                {todo.effort === "medium" && "o"}
-                {todo.effort === "deep" && "O"}
-              </span>
-            )}
-            {todo.tags && todo.tags.length > 0 && (
-              <span className="text-text-faint">
-                {todo.tags.map(t => `#${t}`).join(" ")}
-              </span>
-            )}
+          <div className="flex flex-wrap items-center gap-x-2 mt-1 text-xs text-text-faint">
+            {listName && <span className="text-text-muted">{listName}</span>}
+            {todo.effort && <span className={EFFORT[todo.effort].className}>{EFFORT[todo.effort].mark}</span>}
+            {todo.reminderCadence && <span title="Repeats">&#8635; {todo.reminderCadence}</span>}
+            {todo.tags?.length > 0 && <span>{todo.tags.map((t) => `#${t}`).join(" ")}</span>}
           </div>
 
-          {/* Content preview */}
-          {todo.content && (
-            <p className="mt-2 text-sm text-text-muted line-clamp-2">
-              {todo.content}
-            </p>
-          )}
+          {todo.content && <p className="mt-2 text-sm text-text-muted line-clamp-2">{todo.content}</p>}
 
-          {/* Action buttons - always visible */}
           <div className="flex items-center gap-2 mt-3">
-            {/* Snooze dropdown */}
-            <div className="relative" ref={snoozeRef}>
-              <button
-                onClick={() => setShowSnoozeMenu(!showSnoozeMenu)}
-                className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2"
-              >
-                Snooze
-              </button>
-              {showSnoozeMenu && (
-                <div className="absolute top-full left-0 mt-1 bg-background-tertiary border border-border z-50 min-w-[120px]">
-                  {SNOOZE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.label}
-                      onClick={() => handleSnooze(opt.hours)}
-                      className="w-full text-left px-3 py-3 sm:py-2 text-sm text-text-normal
-                                 hover:bg-background-secondary active:bg-background-secondary transition-colors"
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Edit button */}
-            <button
-              onClick={() => onEdit(todo)}
-              className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2"
-            >
+            {!done && (
+              <div className="relative" ref={snoozeRef}>
+                <button onClick={() => setSnoozeOpen(!snoozeOpen)} className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2">
+                  Snooze
+                </button>
+                {snoozeOpen && (
+                  <div className="absolute top-full left-0 mt-1 bg-background-tertiary border border-border z-50 min-w-[170px] shadow-glow">
+                    {snoozeOptions().map((o) => (
+                      <button
+                        key={o.label}
+                        onClick={() => { onSnooze(todo, o.until); setSnoozeOpen(false); }}
+                        className="w-full text-left px-3 py-3 sm:py-2 text-sm hover:bg-background-secondary active:bg-background-secondary"
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <button onClick={() => onEdit(todo)} className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2">
               Edit
             </button>
-
-            {/* Delete button */}
             <button
-              onClick={() => onDelete(todo.id)}
+              onClick={() => onDelete(todo)}
               className="incandescent-button text-xs py-1.5 sm:py-1 px-3 sm:px-2 hover:border-error hover:text-error"
             >
               Delete

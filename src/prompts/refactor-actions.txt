@@ -1,0 +1,10 @@
+The app can apply these changes:
+
+- edit: change one list's name, summary and/or tags. Fields left null stay as they are.
+- merge: combine two or more lists into a new list with the given name and summary. Every item moves into it and the source lists are deleted.
+- split: pull named items out of one list into one or more new lists. Items not named in any target stay where they are; the source list is deleted only if it ends up empty. New lists default to the source's tags and time-bound setting.
+- move: move named items from one list into another existing list. An empty item list moves everything.
+- delete: permanently delete lists and every item in them. This can't be undone.
+- edit_items: change individual items' title, notes, tags or effort, found by their current title (case-insensitive) within the given lists, or across all active items when no lists are given. Fields left null stay as they are.
+
+Lists are referred to by the IDs shown above and items by their exact titles; an ID that doesn't exist makes that change fail.

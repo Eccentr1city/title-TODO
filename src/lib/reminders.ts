@@ -59,7 +59,7 @@ export async function checkReminders(): Promise<void> {
       title: t.title,
       body: t.listName ?? undefined,
       tag: `todo-${t.id}`,
-      url: "/",
+      url: `/?todo=${t.id}`,
       badge,
     });
   }

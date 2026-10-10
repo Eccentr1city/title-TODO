@@ -2,20 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 
-type ModelTier = "cheap" | "medium" | "expensive";
+import { MODEL_LABELS, type ModelTier } from "@/lib/models";
 
 interface MagicInputProps {
-  onSubmit: (text: string, model: ModelTier) => Promise<void>;
+  // Resolves false when the input couldn't be processed; the text is restored
+  onSubmit: (text: string, model: ModelTier) => Promise<boolean>;
   isProcessing: boolean;
   canUndo: boolean;
   onUndo: () => Promise<void>;
 }
-
-const MODEL_LABELS: Record<ModelTier, string> = {
-  cheap: "Haiku",
-  medium: "Sonnet",
-  expensive: "Opus",
-};
 
 const MODEL_DESCRIPTIONS: Record<ModelTier, string> = {
   cheap: "Fast",
@@ -87,7 +82,7 @@ export function MagicInput({ onSubmit, isProcessing, canUndo, onUndo }: MagicInp
     if (!value.trim() || isProcessing) return;
     const text = value;
     setValue("");
-    await onSubmit(text, effectiveModel);
+    if (!(await onSubmit(text, effectiveModel))) setValue(text);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

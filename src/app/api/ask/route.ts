@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
   const completedTodos = listTodos.filter((t) => t.status === "completed");
 
   const todosContext = activeTodos
-    .map((t, i) => {
-      let line = `${i + 1}. ${t.title}`;
+    .map((t) => {
+      let line = `- ${t.title}`;
       if (t.content) line += ` - ${t.content}`;
       if (t.tags && t.tags.length > 0) line += ` [${t.tags.join(", ")}]`;
       return line;
