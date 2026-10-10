@@ -12,6 +12,7 @@ import { TodoItem, TodoList } from "@/lib/types";
 import { effectivePriority, computeVotePriority, priorityHeatClass } from "@/lib/priority";
 import { readTextStream } from "@/lib/stream-client";
 import { localDateISO } from "@/lib/dates";
+import { registerServiceWorker, setBadge } from "@/lib/push-client";
 
 // Special view IDs
 const VIEW_INBOX = null;
@@ -91,6 +92,21 @@ export default function Home() {
     setLists(listsData);
     setTodos(todosData);
   }, []);
+
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
+  // Home-screen badge = active todos whose reminder has passed (matches what
+  // the server counts when it sends a reminder push).
+  useEffect(() => {
+    const now = Date.now();
+    setBadge(
+      todos.filter(
+        (t) => t.status === "active" && t.nextReminder && new Date(t.nextReminder).getTime() <= now
+      ).length
+    );
+  }, [todos]);
 
   // Fetch completed todos when switching to completed view
   const fetchCompleted = useCallback(async () => {

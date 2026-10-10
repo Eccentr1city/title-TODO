@@ -20,6 +20,9 @@ export const todos = sqliteTable("todos", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   nextReminder: integer("next_reminder", { mode: "timestamp" }),
   reminderCadence: text("reminder_cadence"), // "daily", "weekly", "2 weeks", etc.
+  // The nextReminder value we last sent a push for. A snooze or edit changes
+  // nextReminder, so each reminder time notifies exactly once.
+  notifiedReminder: integer("notified_reminder", { mode: "timestamp" }),
   
   // Status
   status: text("status", { enum: ["active", "completed", "archived"] }).notNull().default("active"),
@@ -41,6 +44,14 @@ export const todos = sqliteTable("todos", {
 export const meta = sqliteTable("meta", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+});
+
+// Web Push subscriptions, one per installed device
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  endpoint: text("endpoint").primaryKey(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
 // Types

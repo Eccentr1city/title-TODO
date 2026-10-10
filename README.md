@@ -7,6 +7,7 @@ Magic TODO lists powered by LLMs. A Next.js app with a SQLite backend (Drizzle O
 - **Refactor** — have the model reorganize/merge/split lists, with undo
 - **Obsidian sync** — triage items from an Obsidian vault into lists
 - Manual priority sorting, inline editing, auto-refresh
+- **Reminder notifications** — Web Push to the home-screen app when a todo's reminder time arrives (once per reminder/snooze), plus an app-icon badge counting due items
 
 ## Access and hosting
 
@@ -14,7 +15,8 @@ Runs on the home server `perihelion` in Docker as a production build (`next buil
 **https://perihelion.tail18d97e.ts.net/** (tailnet only, published with `tailscale serve --https=443 http://127.0.0.1:3000`).
 
 - Data (`todos.db` + the JSON state files) lives in `/srv/data/title-todo`, snapshotted hourly; a pre-backup hook takes a consistent SQLite copy.
-- `ANTHROPIC_API_KEY` is in `/srv/secrets/title-todo.env` on perihelion (source of truth: 1Password).
+- `ANTHROPIC_API_KEY` and the Web Push keys (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) are in `/srv/secrets/title-todo.env` on perihelion (source of truth: 1Password). Without the VAPID keys, notifications are simply off.
+- Notifications: `src/instrumentation.ts` starts a once-a-minute loop (`src/lib/reminders.ts`) in the server process; `public/sw.js` shows pushes. Enable per device from the sidebar (iOS: only inside the installed home-screen app).
 - Obsidian import only works where the vault exists (`OBSIDIAN_NOTES_DIR`, default `~/Documents/Adam's Notes` on the Mac); on perihelion those routes return 503.
 - Deploy: `rsync -a --delete --exclude-from=.dockerignore ./ perihelion:/srv/apps/title-todo/ && ssh perihelion 'cd /srv/apps/title-todo && docker compose up -d --build'`
 - Logs: `ssh perihelion 'docker logs title-todo-title-todo-1'`

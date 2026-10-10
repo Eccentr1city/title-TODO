@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TodoList } from "@/lib/types";
+import { NotificationToggle } from "./NotificationToggle";
 
 interface SidebarProps {
   lists: TodoList[];
@@ -340,6 +341,7 @@ export function Sidebar({ lists, selectedView, onSelectView, inboxCount, complet
           <span>~</span>
           <span>Refactor Lists</span>
         </button>
+        <NotificationToggle />
         <div className="px-4 py-2 text-xs text-text-faint">
           {lists.length} lists | {lists.reduce((sum, l) => sum + l.itemCount, 0)} items
         </div>
