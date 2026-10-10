@@ -23,8 +23,6 @@ type CallOptions = {
   system?: string;
   maxTokens?: number;
   effort?: Effort;
-  // SDK retries 429/5xx with backoff; bulk callers (Obsidian triage) raise it.
-  maxRetries?: number;
 };
 
 function checkStop(response: Anthropic.Message): void {
@@ -45,18 +43,15 @@ export async function structured<S extends z.ZodType>(
   messages: Anthropic.MessageParam[],
   options: CallOptions = {}
 ): Promise<z.infer<S>> {
-  const { model = "cheap", system, maxTokens = 16000, effort, maxRetries } = options;
+  const { model = "cheap", system, maxTokens = 16000, effort } = options;
 
-  const response = await anthropic.messages.parse(
-    {
-      model: MODELS[model],
-      max_tokens: maxTokens,
-      system,
-      messages,
-      output_config: { format: zodOutputFormat(schema), ...(effort ? { effort } : {}) },
-    },
-    maxRetries === undefined ? undefined : { maxRetries }
-  );
+  const response = await anthropic.messages.parse({
+    model: MODELS[model],
+    max_tokens: maxTokens,
+    system,
+    messages,
+    output_config: { format: zodOutputFormat(schema), ...(effort ? { effort } : {}) },
+  });
 
   checkStop(response);
   if (response.parsed_output == null) {

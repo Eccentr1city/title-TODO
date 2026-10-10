@@ -1,6 +1,6 @@
 import fs from "fs";
 
-// Small JSON state files in DATA_DIR (inbox filter, Obsidian sync state).
+// Small JSON state files in DATA_DIR (e.g. the inbox filter).
 
 export function readJson<T>(file: string, fallback: T): T {
   try {

@@ -88,4 +88,9 @@ retryBusy(() => sqlite.transaction(() => {
       "UPDATE todos SET notified_reminder = next_reminder WHERE next_reminder IS NOT NULL AND next_reminder <= unixepoch()"
     );
   }
+
+  if (!columnNames.has("archived_at")) {
+    sqlite.exec("ALTER TABLE todos ADD COLUMN archived_at INTEGER");
+    sqlite.exec("UPDATE todos SET archived_at = unixepoch() WHERE status = 'archived'");
+  }
 }).immediate());

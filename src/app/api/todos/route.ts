@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     reminderCadence: body.reminderCadence || null,
     status: "active",
     completedAt: null,
+    archivedAt: null,
     source: body.source || "manual",
     sourceRef: body.sourceRef || null,
     tags: body.tags || [],

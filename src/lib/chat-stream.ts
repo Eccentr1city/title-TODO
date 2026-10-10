@@ -1,27 +1,22 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic, MODELS, type Effort, type ModelTier } from "./anthropic";
 
-// Shared backend for all conversational LLM routes (ask, refactor chat,
-// obsidian plan/manual). Streams raw text chunks so the client can render
-// incrementally, and — because streaming has no HTTP-timeout ceiling — allows
-// very large output budgets (obsidian imports can be gigantic).
+// Shared backend for the conversational routes (ask, refactor chat). Streams
+// raw text chunks so the client can render incrementally, and — because
+// streaming has no HTTP-timeout ceiling — allows large output budgets.
 export function streamChatResponse(opts: {
   model?: ModelTier;
   system?: string;
   messages: Anthropic.MessageParam[];
   maxTokens?: number;
   effort?: Effort;
-  // Emitted to the client before any model output (e.g. warnings about
-  // missing files) so routes don't need a separate JSON side-channel.
-  prefix?: string;
 }): Response {
-  const { model = "medium", system, messages, maxTokens = 64000, effort, prefix } = opts;
+  const { model = "medium", system, messages, maxTokens = 64000, effort } = opts;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        if (prefix) controller.enqueue(encoder.encode(prefix));
         const s = anthropic.messages.stream({
           model: MODELS[model],
           max_tokens: maxTokens,

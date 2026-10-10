@@ -1,1 +1,0 @@
-Extract the list of categories/lists from this TODO plan, e.g. "Books to Read", "Shopping", "Home Improvement".

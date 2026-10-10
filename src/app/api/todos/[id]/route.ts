@@ -26,6 +26,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (body.status !== undefined) {
     updates.status = body.status;
     updates.completedAt = body.status === "completed" ? new Date() : null;
+    updates.archivedAt = body.status === "archived" ? new Date() : null;
 
     // Completing a recurring todo reschedules it rather than closing it
     if (body.status === "completed") {

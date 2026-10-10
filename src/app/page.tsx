@@ -6,8 +6,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { TodoCard } from "@/components/TodoCard";
 import { TodoEditor } from "@/components/TodoEditor";
 import { AskAboutList } from "@/components/AskAboutList";
+import { ListEditor } from "@/components/ListEditor";
 import { RefactorLists } from "@/components/RefactorLists";
-import { ObsidianSync } from "@/components/ObsidianSync";
 import { CopyMenu, FilterMenu } from "@/components/HeaderMenus";
 import { useToast } from "@/components/Toast";
 import type { TodoItem } from "@/lib/types";
@@ -36,6 +36,7 @@ export default function Home() {
   const [search, setSearch] = useState<string | null>(null); // null: search closed
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editing, setEditing] = useState<TodoItem | null>(null);
+  const [editingList, setEditingList] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [lastMagic, setLastMagic] = useState<MagicResult | null>(null);
   const [highlight, setHighlight] = useState<{ todos: Set<string>; lists: Set<string> }>({ todos: new Set(), lists: new Set() });
@@ -123,9 +124,8 @@ export default function Home() {
     search !== null ? "Search"
     : view === VIEW.completed ? "Completed"
     : view === VIEW.refactor ? "Refactor Lists"
-    : view === VIEW.obsidian ? "Sync Obsidian Notes"
     : selectedList?.name ?? "Inbox";
-  const isTool = search === null && (view === VIEW.refactor || view === VIEW.obsidian);
+  const isTool = search === null && view === VIEW.refactor;
 
   // Scroll once the target is rendered in the view focusTodo switched to
   useEffect(() => {
@@ -207,13 +207,13 @@ export default function Home() {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setSearch((s) => (s === null ? "" : null));
-      } else if (e.key === "Escape" && search !== null && !editing) {
+      } else if (e.key === "Escape" && search !== null && !editing && !editingList) {
         setSearch(null);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [search, editing]);
+  }, [search, editing, editingList]);
 
   const exportView = { title, summary: selectedList?.summary, sections, listName: (t: TodoItem) => (selectedList ? undefined : listName(t)) };
 
@@ -268,6 +268,11 @@ export default function Home() {
                   <h2 className="text-xl heat-2 truncate">{title}</h2>
                   {selectedList?.summary && <p className="text-sm text-text-muted mt-0.5 truncate">{selectedList.summary}</p>}
                 </div>
+                {selectedList && (
+                  <button onClick={() => setEditingList(true)} className="text-text-muted hover:text-accent text-sm px-2 py-1.5">
+                    edit
+                  </button>
+                )}
                 {!isTool && (
                   <>
                     <button onClick={() => setSearch("")} className="text-text-muted hover:text-accent text-sm px-2 py-1.5" title="Search (⌘K)">
@@ -283,10 +288,7 @@ export default function Home() {
             )}
           </header>
 
-          {/* The tools stay mounted so their conversations survive switching views */}
-          <div className={view === VIEW.obsidian && search === null ? "flex flex-col flex-1 min-h-0" : "hidden"}>
-            <ObsidianSync onApplied={data.refresh} onDone={() => selectView(VIEW.inbox)} />
-          </div>
+          {/* Stays mounted so the conversation survives switching views */}
           <div className={view === VIEW.refactor && search === null ? "flex flex-col flex-1 min-h-0" : "hidden"}>
             <RefactorLists lists={lists} onApplied={data.refresh} onDone={() => selectView(VIEW.inbox)} />
           </div>
@@ -344,12 +346,20 @@ export default function Home() {
         </main>
       </div>
 
-      {/* The tools have their own chat input */}
+      {/* Refactor has its own chat input */}
       {!isTool && (
         <footer className="flex-shrink-0 border-t border-border">
           <MagicInput onSubmit={submitMagic} isProcessing={processing} canUndo={!!lastMagic?.todos.length} onUndo={undoMagic} />
         </footer>
       )}
+
+      <ListEditor
+        list={editingList && selectedList ? selectedList : null}
+        categories={[...new Set(lists.map((l) => l.tags[0]).filter(Boolean))].sort()}
+        onSaved={data.refresh}
+        onDeleted={() => { selectView(VIEW.inbox); data.refresh(); }}
+        onClose={() => setEditingList(false)}
+      />
 
       <TodoEditor
         todo={editing}

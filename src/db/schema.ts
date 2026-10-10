@@ -27,6 +27,8 @@ export const todos = sqliteTable("todos", {
   // Status
   status: text("status", { enum: ["active", "completed", "archived"] }).notNull().default("active"),
   completedAt: integer("completed_at", { mode: "timestamp" }),
+  // When it was deleted (status "archived" is the trash); purged after 30 days
+  archivedAt: integer("archived_at", { mode: "timestamp" }),
   
   // Source tracking
   source: text("source", { enum: ["magic_input", "obsidian", "manual"] }).notNull().default("magic_input"),

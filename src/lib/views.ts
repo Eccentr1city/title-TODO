@@ -6,7 +6,6 @@ export const VIEW = {
   completed: "__completed__",
   search: "__search__",
   refactor: "__refactor__",
-  obsidian: "__obsidian__",
 } as const;
 
 export const isListView = (v: View): v is string => !!v && !v.startsWith("__");
