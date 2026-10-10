@@ -165,8 +165,10 @@ async function triageNote(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await anthropic.messages.create({
-        model: "claude-haiku-4-5",
-        max_tokens: 512,
+        model: "claude-haiku-5-5",
+        // Haiku 5.5 thinks by default; keep it shallow and leave headroom
+        max_tokens: 4096,
+        output_config: { effort: "low" },
         system: prompt,
         messages: [
           {

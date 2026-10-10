@@ -27,7 +27,7 @@ export function streamChatResponse(opts: {
           max_tokens: maxTokens,
           system,
           messages,
-          ...(effort && model !== "cheap" ? { output_config: { effort } } : {}),
+          ...(effort ? { output_config: { effort } } : {}),
         });
 
         s.on("text", (delta) => controller.enqueue(encoder.encode(delta)));

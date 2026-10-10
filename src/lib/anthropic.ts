@@ -5,9 +5,9 @@ export const anthropic = new Anthropic({
 });
 
 export const MODELS = {
-  cheap: "claude-haiku-4-5",
-  medium: "claude-sonnet-5",
-  expensive: "claude-opus-5",
+  cheap: "claude-haiku-5-5",
+  medium: "claude-sonnet-5-5",
+  expensive: "claude-opus-5-5",
 } as const;
 
 export type ModelTier = keyof typeof MODELS;
@@ -18,14 +18,13 @@ export async function chat(
     model?: ModelTier;
     system?: string;
     maxTokens?: number;
-    // Sonnet 5 / Opus 5 think by default at effort "high", which can burn the
-    // whole token budget on thinking for large contexts. Lower effort for
-    // latency-sensitive routes. Not supported on Haiku (cheap) — omitted there.
+    // All tiers think by default (default effort: Haiku/Opus "medium",
+    // Sonnet "high"), which can burn the whole token budget on thinking for
+    // large contexts. Lower effort for latency-sensitive routes.
     effort?: "low" | "medium" | "high";
   } = {}
 ) {
-  // Sonnet 5 / Opus 5 think by default, and thinking tokens count against
-  // max_tokens — keep headroom so answers don't truncate.
+  // Thinking tokens count against max_tokens — keep headroom so answers don't truncate.
   const { model = "cheap", system, maxTokens = 4096, effort } = options;
 
   const response = await anthropic.messages.create({
@@ -33,7 +32,7 @@ export async function chat(
     max_tokens: maxTokens,
     system: system,
     messages: messages,
-    ...(effort && model !== "cheap" ? { output_config: { effort } } : {}),
+    ...(effort ? { output_config: { effort } } : {}),
   });
 
   if (response.stop_reason === "refusal") {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { anthropic } from "@/lib/anthropic";
+import { anthropic, MODELS } from "@/lib/anthropic";
 import fs from "fs";
 import path from "path";
 import { loadPrompt } from "@/lib/prompts";
@@ -125,8 +125,10 @@ export async function POST(request: NextRequest) {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const response = await anthropic.messages.create({
-            model: "claude-haiku-4-5",
-            max_tokens: 512,
+            model: MODELS.cheap,
+            // Haiku 5.5 thinks by default; keep it shallow and leave headroom
+            max_tokens: 4096,
+            output_config: { effort: "low" },
             system: triagePrompt,
             messages: [
               { role: "user", content: `Filename: ${note.relPath}\n\n---\n\n${content}` },

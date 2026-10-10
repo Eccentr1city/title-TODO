@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
         model: "expensive",
         system: loadPrompt("refactor.txt"),
         maxTokens: 16000,
+        // Opus 5.5 defaults to "medium"; this is the deep-analysis route
+        effort: "high",
       }
     );
 
