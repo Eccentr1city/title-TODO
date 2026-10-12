@@ -1,3 +1,5 @@
+import { MORNING_HOUR } from "./dates";
+
 // Recurring todos: reminderCadence is free text ("daily", "weekly", "2 weeks",
 // "every 3 days", "monthly"...). Completing a recurring todo schedules its next
 // occurrence instead of closing it.
@@ -41,8 +43,8 @@ function add(d: Date, { unit, n }: Interval): Date {
 }
 
 // The next reminder after `now`, stepping from the previous reminder so the
-// time of day is kept (a 9am weekly reminder stays at 9am). Without a previous
-// reminder, one interval from now at 9am.
+// time of day is kept (a 10am weekly reminder stays at 10am). Without a
+// previous reminder, one interval from now in the morning.
 export function nextOccurrence(
   cadence: string | null | undefined,
   previous: Date | null,
@@ -56,7 +58,7 @@ export function nextOccurrence(
     while (next <= now) next = add(next, interval);
   } else {
     next = add(now, interval);
-    next.setHours(9, 0, 0, 0);
+    next.setHours(MORNING_HOUR, 0, 0, 0);
   }
   return next;
 }

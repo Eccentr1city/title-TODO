@@ -1,3 +1,7 @@
+// The hour reminders default to when only a day is known (and "morning"
+// snoozes). Also stated in the magic and parse-time prompts.
+export const MORNING_HOUR = 10;
+
 // Today's date as YYYY-MM-DD in the server's local time zone (TZ), not UTC:
 // toISOString() rolls over to tomorrow at 5pm Pacific.
 export function localDateISO(d: Date = new Date()): string {

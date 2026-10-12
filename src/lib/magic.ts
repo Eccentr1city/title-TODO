@@ -26,7 +26,7 @@ export const TodoSpec = z.object({
   nextReminder: z
     .string()
     .nullable()
-    .describe("ISO 8601 local time with UTC offset, e.g. 2026-10-12T09:00:00-07:00"),
+    .describe("ISO 8601 local time with UTC offset, e.g. 2026-10-12T10:00:00-07:00"),
   reminderCadence: z.string().nullable().describe("daily / weekly / monthly, or null"),
   tags: z.array(z.string()),
   effort: z.enum(["quick", "medium", "deep"]).nullable(),

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { TodoItem } from "@/lib/types";
 import { snoozeOptions } from "@/lib/snooze";
+import { TimeInput } from "./TimeInput";
 
 type Props = {
   todo: TodoItem;
@@ -102,7 +103,7 @@ export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote,
                   Snooze
                 </button>
                 {snoozeOpen && (
-                  <div className="absolute top-full left-0 mt-1 bg-background-tertiary border border-border z-50 min-w-[170px] shadow-glow">
+                  <div className="absolute top-full left-0 mt-1 bg-background-tertiary border border-border z-50 w-64 shadow-glow">
                     {snoozeOptions().map((o) => (
                       <button
                         key={o.label}
@@ -112,6 +113,10 @@ export function TodoCard({ todo, onComplete, onSnooze, onEdit, onDelete, onVote,
                         {o.label}
                       </button>
                     ))}
+                    <TimeInput
+                      className="p-2 border-t border-border"
+                      onResolved={(when) => { onSnooze(todo, when); setSnoozeOpen(false); }}
+                    />
                   </div>
                 )}
               </div>

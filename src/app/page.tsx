@@ -159,7 +159,9 @@ export default function Home() {
   const snooze = (todo: TodoItem, until: Date) =>
     run(async () => {
       await data.snooze(todo.id, until);
-      toast.show(`Snoozed until ${describeWhen(until)}`);
+      toast.show(`Snoozed until ${describeWhen(until)}`, {
+        action: { label: "Undo", run: () => run(() => data.save(todo.id, { nextReminder: todo.nextReminder })) },
+      });
     });
 
   const remove = (todo: TodoItem) =>

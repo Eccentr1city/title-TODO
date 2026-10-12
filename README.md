@@ -5,7 +5,7 @@ Magic TODO lists powered by LLMs. A Next.js app with a SQLite backend (Drizzle O
 - **Magic input** — dump free-form text and the model turns it into todos in the right lists, with reminders (undo with one tap)
 - **Reminders** — Web Push to the home-screen app when a todo's reminder time arrives (once per reminder or snooze; tapping opens that todo), an app-icon badge counting due items, and a "Due now" section in the Inbox
 - **Repeating todos** — completing a todo with a cadence ("weekly", "every 3 days", "monthly"...) schedules its next occurrence instead of closing it
-- **Snooze** to sensible times (this evening, tomorrow morning, the weekend, next week); deleted todos go to the trash (status `archived`) with Undo and are purged after 30 days
+- **Snooze** to sensible times (this evening, tomorrow morning, the weekend, next week) or a time typed in words ("Oct 19", "next Thu 8pm" — parsed by Haiku via `/api/parse-time`); "morning" means 10 am; deleted todos go to the trash (status `archived`) with Undo and are purged after 30 days
 - **Ask** — questions about a list ("what should I do first?")
 - **Refactor** — chat with Sonnet about reorganizing lists, then Implement: the server extracts the agreed changes as typed actions (structured outputs) and applies each in a transaction
 - **Quick add from anywhere on the phone** — an iOS Shortcut posts text to `/api/quick-add` (see below)

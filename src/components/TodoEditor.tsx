@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { TodoItem, TodoList } from "@/lib/types";
+import { TimeInput } from "./TimeInput";
 
 type Props = {
   todo: TodoItem | null;
@@ -128,6 +129,11 @@ export function TodoEditor({ todo, lists, onSave, onClose }: Props) {
                   </button>
                 )}
               </div>
+              <TimeInput
+                className="mt-2"
+                placeholder="Or type: Oct 19, Fri 8pm…"
+                onResolved={(when) => setReminder(toLocalInput(when.toISOString()))}
+              />
             </Field>
             <Field label="Repeats">
               <select value={cadence} onChange={(e) => setCadence(e.target.value)} className="w-full incandescent-input px-3 py-2">
