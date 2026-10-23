@@ -6,7 +6,10 @@ export const metadata: Metadata = {
   description: "Magic TODO lists powered by LLMs",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    // solid, not black-translucent: under a see-through status bar iOS 18
+    // home-screen apps get a viewport 59pt short of what they draw, so the
+    // bottom of the app is never shown. Changing this needs the icon re-added.
+    statusBarStyle: "black",
     title: "TODO",
   },
   other: {
