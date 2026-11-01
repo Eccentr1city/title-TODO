@@ -42,10 +42,12 @@ export async function sendToAll(payload: PushPayload): Promise<number> {
           body,
           { TTL: 60 * 60 * 24 }
         );
+        console.log(`Push "${payload.title}" accepted by ${new URL(sub.endpoint).host}`);
         return true;
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {
+          console.log(`Push subscription at ${new URL(sub.endpoint).host} expired (${status}); removed`);
           await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, sub.endpoint));
         } else {
           console.error("Push send failed:", status, err instanceof Error ? err.message : err);

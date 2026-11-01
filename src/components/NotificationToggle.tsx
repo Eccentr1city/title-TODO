@@ -69,16 +69,30 @@ export function NotificationToggle() {
     busy: "…",
   }[state];
 
+  const sendTest = async () => {
+    setNote(null);
+    const res = await fetch("/api/push/test", { method: "POST" }).catch(() => null);
+    const { sent } = res?.ok ? await res.json() : { sent: 0 };
+    setNote(sent ? "Test sent — it should arrive in a few seconds" : "Couldn't send a test");
+  };
+
   return (
+    <div className="flex items-center">
     <button
       onClick={state === "off" ? enable : state === "on" ? disable : undefined}
       disabled={state === "install" || state === "denied" || state === "busy"}
       title={state === "on" ? "Tap to turn off on this device" : note ?? undefined}
-      className="w-full text-left px-4 py-3 flex items-center gap-2 transition-all duration-150 text-sm
+      className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-2 transition-all duration-150 text-sm
                  hover:bg-background-tertiary text-text-muted disabled:hover:bg-transparent disabled:opacity-70"
     >
       <span className={state === "on" ? "text-accent" : ""}>{state === "on" ? "●" : "○"}</span>
       <span>{label}</span>
     </button>
+    {state === "on" && (
+      <button onClick={sendTest} className="flex-shrink-0 px-4 py-3 text-xs text-text-faint hover:text-accent" title={note ?? undefined}>
+        {note?.startsWith("Test sent") ? "sent" : "send test"}
+      </button>
+    )}
+    </div>
   );
 }
