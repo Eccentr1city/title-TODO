@@ -17,6 +17,7 @@ import { registerServiceWorker, setBadge } from "@/lib/push-client";
 import { isDue, useTodos, type MagicResult } from "@/lib/use-todos";
 import { useInboxFilter } from "@/lib/use-inbox-filter";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
+import { usePush } from "@/lib/use-push";
 import { copyText, viewAsJson, viewAsMarkdown } from "@/lib/export";
 import { describeWhen } from "@/lib/snooze";
 import { isListView, VIEW, type View } from "@/lib/views";
@@ -30,6 +31,7 @@ export default function Home() {
   const data = useTodos();
   const inbox = useInboxFilter();
   const toast = useToast();
+  const push = usePush();
   useKeyboardInset();
 
   const [view, setView] = useState<View>(VIEW.inbox);
@@ -237,6 +239,7 @@ export default function Home() {
             completedCount={todos.filter((t) => t.status === "completed").length}
             highlightedListIds={highlight.lists}
             onRefresh={data.refresh}
+            push={push}
           />
         </div>
 
@@ -298,6 +301,18 @@ export default function Home() {
           {!isTool && (
             <>
               <div className="flex-1 overflow-y-auto p-4">
+                {/* A freshly (re)installed home-screen app starts unsubscribed, and
+                    nothing else would say so: reminders just stop arriving */}
+                {push.nudge && view === VIEW.inbox && search === null && (
+                  <div className="max-w-2xl mb-4 flex border border-accent/40 bg-accent/5 text-sm text-accent">
+                    <button onClick={push.enable} className="flex-1 p-3 text-left">
+                      Reminders are off on this device — tap to turn on notifications.
+                    </button>
+                    <button onClick={push.decline} className="px-3 text-text-faint hover:text-accent" aria-label="Dismiss">
+                      &times;
+                    </button>
+                  </div>
+                )}
                 {visible.length === 0 ? (
                   <div className="text-center py-12 text-text-muted">
                     {!data.loaded

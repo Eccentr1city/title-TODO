@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TodoList } from "@/lib/types";
 import { NotificationToggle } from "./NotificationToggle";
+import type { usePush } from "@/lib/use-push";
 
 interface SidebarProps {
   lists: TodoList[];
@@ -12,6 +13,7 @@ interface SidebarProps {
   completedCount: number;
   highlightedListIds?: Set<string>;
   onRefresh: () => void | Promise<void>;
+  push: ReturnType<typeof usePush>;
 }
 
 const UNGROUPED = "ungrouped";
@@ -21,7 +23,7 @@ type DragItem =
   | { type: "category"; tag: string }
   | { type: "list"; id: string };
 
-export function Sidebar({ lists, selectedView, onSelectView, inboxCount, completedCount, highlightedListIds, onRefresh }: SidebarProps) {
+export function Sidebar({ lists, selectedView, onSelectView, inboxCount, completedCount, highlightedListIds, onRefresh, push }: SidebarProps) {
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{ type: "category" | "list"; key: string } | null>(null);
@@ -330,7 +332,7 @@ export function Sidebar({ lists, selectedView, onSelectView, inboxCount, complet
           <span>~</span>
           <span>Refactor Lists</span>
         </button>
-        <NotificationToggle />
+        <NotificationToggle push={push} />
         <div className="px-4 py-2 text-xs text-text-faint">
           {lists.length} lists | {lists.reduce((sum, l) => sum + l.itemCount, 0)} items
         </div>
